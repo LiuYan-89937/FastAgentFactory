@@ -1,15 +1,14 @@
-import mermaid from 'mermaid'
 import { runtimeLocale, translate } from '@/i18n'
 import { writeClipboardText } from '@/utils/clipboard'
+import { enhanceMermaidDiagrams } from './mermaid'
 
-let mermaidInitialized = false
 const copyHandlerRoots = new WeakSet<EventTarget>()
 const copyResetTimers = new WeakMap<HTMLButtonElement, number>()
 
 export async function enhanceRenderedMarkdown(root: ParentNode | null): Promise<void> {
   if (!root) return
   enhanceCodeCopyButtons(root)
-  await renderMermaidDiagrams(root)
+  await enhanceMermaidDiagrams(root)
 }
 
 function enhanceCodeCopyButtons(root: ParentNode): void {
@@ -62,25 +61,4 @@ async function copyCode(button: HTMLButtonElement, content: string): Promise<voi
     copyResetTimers.delete(button)
   }, 1600)
   copyResetTimers.set(button, timer)
-}
-
-async function renderMermaidDiagrams(root: ParentNode): Promise<void> {
-  const nodes = Array.from(root.querySelectorAll<HTMLElement>('.mermaid:not([data-processed="true"])'))
-  if (nodes.length === 0) return
-  if (!mermaidInitialized) {
-    mermaid.initialize({
-      startOnLoad: false,
-      securityLevel: 'strict',
-      theme: 'neutral',
-    })
-    mermaidInitialized = true
-  }
-  nodes.forEach((node) => {
-    node.dataset.processed = 'true'
-  })
-  try {
-    await mermaid.run({ nodes })
-  } catch (err) {
-    console.error('Mermaid render error:', err)
-  }
 }

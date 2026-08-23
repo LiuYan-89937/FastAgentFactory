@@ -22,6 +22,10 @@ from combo.dynamic_runtime import (
     RuntimeEventBroadcaster,
 )
 from combo.dynamic_runtime.repositories import utc_now_text
+from combo.dynamic_runtime.mermaid_repair import (
+    MAX_MERMAID_ERROR_CHARS,
+    MAX_MERMAID_SOURCE_CHARS,
+)
 from combo.runtime_protocol import (
     CommandEnvelope,
     CommandReceipt,
@@ -111,6 +115,9 @@ class CapabilityPoolManager(Protocol):
         ...
 
     def transcribe_tool_source(self, source: str, *, filename: str) -> dict[str, object]:
+        ...
+
+    def repair_mermaid_source(self, source: str, *, parser_error: str) -> dict[str, object]:
         ...
 
     def add_mcp_server(
@@ -637,6 +644,14 @@ class SkillHubInstallRequest(BaseModel):
             raise ValueError("SkillHub skill must not be empty")
         return text
 
+
+class MermaidRepairRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    source: str = Field(min_length=1, max_length=MAX_MERMAID_SOURCE_CHARS)
+    parser_error: str = Field(default="", max_length=MAX_MERMAID_ERROR_CHARS)
+
+
 def create_dynamic_runtime_router(
     *,
     application: DynamicRuntimeApplication,
@@ -652,6 +667,25 @@ def create_dynamic_runtime_router(
     async def capabilities(request: Request) -> dict[str, object]:
         principal_resolver.resolve(request)
         return await asyncio.to_thread(capability_pools.capability_pool_snapshot)
+
+    @router.post("/markdown/mermaid/repair")
+    async def repair_mermaid(
+        request: Request,
+        payload: MermaidRepairRequest,
+    ) -> dict[str, object]:
+        principal_resolver.resolve(request)
+        try:
+            result = await asyncio.to_thread(
+                capability_pools.repair_mermaid_source,
+                payload.source,
+                parser_error=payload.parser_error,
+            )
+            return result.model_dump(mode="json") if hasattr(result, "model_dump") else dict(result)
+        except RuntimeError as exc:
+            status = 409 if str(exc) == "task_model_not_configured" else 502
+            raise HTTPException(status_code=status, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     @router.get("/main-agent-capability-profile")
     async def main_agent_capability_profile(request: Request) -> dict[str, object]:

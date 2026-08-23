@@ -87,6 +87,7 @@ from combo.dynamic_runtime.tool_package_source import (
 )
 from combo.dynamic_runtime.tool_package_runtime import ToolPackageRuntime
 from combo.dynamic_runtime.tool_transcriber import ToolTranscriptionResult, transcribe_tool_source
+from combo.dynamic_runtime.mermaid_repair import MermaidRepairResult, repair_mermaid_source
 from combo.dynamic_runtime.mcp_content_runtime import MCPContentRuntime
 from combo.environment_system import DependencyPoolService
 from combo.dynamic_runtime.application import DynamicRuntimeStores
@@ -1433,6 +1434,13 @@ class RuntimeBackend:
 
     def transcribe_tool_source(self, source: str, *, filename: str) -> ToolTranscriptionResult:
         return transcribe_tool_source(source, filename=filename, store=ModelPoolStore(setup=False))
+
+    def repair_mermaid_source(self, source: str, *, parser_error: str) -> MermaidRepairResult:
+        return repair_mermaid_source(
+            source,
+            parser_error=parser_error,
+            store=ModelPoolStore(setup=False),
+        )
 
     def _write_tool_package_draft(
         self,

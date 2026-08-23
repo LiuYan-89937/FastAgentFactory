@@ -143,8 +143,12 @@
 }
 
 .markdown-content .mermaid {
+  position: relative;
+  width: 100%;
   max-width: 100%;
-  overflow-x: auto;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
   margin: 14px 0;
   padding: 12px;
   background: var(--app-surface-muted);
@@ -152,9 +156,164 @@
   border-radius: var(--app-radius-md);
 }
 
+.markdown-content .mermaid[data-mermaid-aspect='wide'] {
+  max-height: 220px;
+}
+
+.markdown-content .mermaid[data-mermaid-aspect='balanced'] {
+  max-height: 320px;
+}
+
+.markdown-content .mermaid[data-mermaid-aspect='tall'] {
+  max-height: 380px;
+}
+
 .markdown-content .mermaid svg {
+  display: block;
   max-width: 100%;
   height: auto;
+  margin: 0 auto;
+}
+
+.markdown-content .mermaid-expand-button,
+.mermaid-preview-close,
+.mermaid-preview-control {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-sm);
+  color: var(--app-text-secondary);
+  background: var(--app-surface-elevated);
+  cursor: pointer;
+  font: inherit;
+  transition: color var(--app-transition-fast), background var(--app-transition-fast), transform var(--app-transition-fast);
+}
+
+.markdown-content .mermaid-expand-button {
+  position: sticky;
+  left: calc(100% - 30px);
+  bottom: 0;
+  z-index: var(--app-z-sticky);
+  margin-top: -30px;
+}
+
+.markdown-content .mermaid-expand-button:hover,
+.mermaid-preview-close:hover,
+.mermaid-preview-control:hover {
+  color: var(--app-text);
+  background: var(--app-surface-hover);
+}
+
+.markdown-content .mermaid-expand-button:active,
+.mermaid-preview-close:active,
+.mermaid-preview-control:active {
+  transform: scale(.92);
+}
+
+.markdown-content .mermaid-render-failed {
+  display: grid;
+  gap: var(--app-space-xs);
+  color: var(--app-error);
+}
+
+.markdown-content .mermaid-repairing {
+  min-height: 96px;
+  display: grid;
+  place-items: center;
+  color: var(--app-text-secondary);
+}
+
+.markdown-content .mermaid-render-failed pre {
+  max-height: 260px;
+  border-radius: var(--app-radius-sm);
+}
+
+.mermaid-preview {
+  position: fixed;
+  inset: 0;
+  z-index: var(--app-z-modal);
+  display: none;
+  align-items: stretch;
+  justify-content: stretch;
+  padding: var(--app-space-lg);
+  background: var(--app-overlay);
+}
+
+.mermaid-preview.is-open {
+  display: flex;
+}
+
+.mermaid-preview-panel {
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  color: var(--app-text);
+  background: var(--app-surface);
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-lg);
+}
+
+.mermaid-preview-header {
+  flex: 0 0 auto;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--app-space-md);
+  padding: var(--app-space-xs) var(--app-space-sm) var(--app-space-xs) var(--app-space-md);
+  border-bottom: 1px solid var(--app-divider);
+}
+
+.mermaid-preview-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--app-space-xs);
+}
+
+.mermaid-preview-zoom {
+  width: min(180px, 22vw);
+  accent-color: var(--app-primary);
+}
+
+.mermaid-preview-zoom-label {
+  min-width: 44px;
+  color: var(--app-text-secondary);
+  font-size: var(--app-font-sm);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.mermaid-preview-viewport {
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.mermaid-preview-stage {
+  min-width: 100%;
+  min-height: 100%;
+  display: grid;
+  place-items: center;
+  padding: var(--app-space-lg);
+  box-sizing: border-box;
+}
+
+.mermaid-preview-stage svg {
+  display: block;
+  max-width: none;
+  max-height: none;
+}
+
+body.mermaid-preview-open {
+  overflow: hidden;
 }
 
 .markdown-content ul,
