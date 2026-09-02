@@ -40,36 +40,26 @@ def get_skillhub_tool_specs() -> list[ToolSpec]:
 
 def _input_schema() -> dict:
     return {
-        "oneOf": [
-            {
-                "type": "object",
-                "properties": {"action": {"const": "status", "description": "检查 SkillHub CLI 是否可用。"}},
-                "required": ["action"],
-                "additionalProperties": False,
+        "type": "object",
+        "properties": {
+            "action": {
+                "type": "string",
+                "enum": ["status", "search", "install", "remove"],
+                "description": "要执行的 SkillHub 操作。",
             },
-            {
-                "type": "object",
-                "properties": {
-                    "action": {"const": "search", "description": "在 SkillHub 中搜索可安装 Skill。"},
-                    "query": {
-                        "type": "string",
-                        "minLength": 1,
-                        "maxLength": SKILLHUB_SEARCH_QUERY_MAX_CHARS,
-                        "pattern": SKILLHUB_SEARCH_QUERY_PATTERN,
-                        "description": "用于 SkillHub 搜索的简短能力关键词。",
-                    },
-                },
-                "required": ["action", "query"],
-                "additionalProperties": False,
+            "query": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": SKILLHUB_SEARCH_QUERY_MAX_CHARS,
+                "pattern": SKILLHUB_SEARCH_QUERY_PATTERN,
+                "description": "search 操作必填；一至三个简短能力关键词。",
             },
-            {
-                "type": "object",
-                "properties": {
-                    "action": {"type": "string", "enum": ["install", "remove"], "description": "安装 SkillHub Skill 或从统一 Skill 池移除它。"},
-                    "skill": {"type": "string", "minLength": 1, "description": "搜索结果返回的 install_name 或已安装 Skill 标识。"},
-                },
-                "required": ["action", "skill"],
-                "additionalProperties": False,
+            "skill": {
+                "type": "string",
+                "minLength": 1,
+                "description": "install/remove 操作必填；搜索结果返回的 install_name 或已安装 Skill 标识。",
             },
-        ]
+        },
+        "required": ["action"],
+        "additionalProperties": False,
     }

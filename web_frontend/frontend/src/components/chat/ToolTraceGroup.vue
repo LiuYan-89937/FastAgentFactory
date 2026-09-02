@@ -11,7 +11,6 @@
       <details class="trace-group" open>
         <summary class="trace-caption">
           <span class="trace-caption-copy">
-            <strong>{{ traceTitle }}</strong>
             <span>{{ t('tool.traceCount', { count: executions.length }) }}</span>
           </span>
           <span class="trace-chevron" aria-hidden="true">⌄</span>
@@ -45,14 +44,6 @@ const props = withDefaults(defineProps<{
 })
 
 const { locale, t } = useI18n()
-const groupState = computed(() => {
-  if (props.executions.some(item => item.status === 'awaiting_approval')) return 'approval'
-  if (props.executions.some(item => item.error || item.status === 'failed')) return 'failed'
-  if (props.executions.some(item => item.status === 'cancelled' || item.status === 'stopped')) return 'cancelled'
-  if (props.executions.some(item => ['requested', 'running', 'streaming'].includes(String(item.status || '')))) return 'running'
-  return 'completed'
-})
-const traceTitle = computed(() => t(`tool.trace.${groupState.value}` as any))
 const formattedTime = computed(() => new Date(props.timestamp || Date.now()).toLocaleTimeString(locale.value, {
   hour: '2-digit',
   minute: '2-digit',
@@ -123,11 +114,6 @@ const formattedTime = computed(() => new Date(props.timestamp || Date.now()).toL
   display: flex;
   align-items: baseline;
   gap: 7px;
-}
-
-.trace-caption-copy strong {
-  color: var(--app-text-secondary);
-  font-size: 12px;
 }
 
 .trace-chevron {

@@ -30,13 +30,30 @@ def run(arguments: dict[str, Any], resources: dict[str, Any]) -> dict[str, Any]:
         raise PermissionError("SkillHub is available only to the main Agent")
     action = str(arguments.get("action") or "").strip()
     if action == "status":
+        _reject_irrelevant_arguments(arguments, "query", "skill")
         output = service.status()
     elif action == "search":
-        output = service.search(normalize_skillhub_search_query(str(arguments.get("query") or "")))
+        _reject_irrelevant_arguments(arguments, "skill")
+        output = service.search(normalize_skillhub_search_query(_required_argument(arguments, "query")))
     elif action == "install":
-        output = service.install(str(arguments.get("skill") or ""))
+        _reject_irrelevant_arguments(arguments, "query")
+        output = service.install(_required_argument(arguments, "skill"))
     elif action == "remove":
-        output = service.remove(str(arguments.get("skill") or ""))
+        _reject_irrelevant_arguments(arguments, "query")
+        output = service.remove(_required_argument(arguments, "skill"))
     else:
         raise ValueError(f"unsupported SkillHub action: {action}")
     return tool_envelope(output, summary=str(output.get("message") or f"SkillHub {action} completed"))
+
+
+def _required_argument(arguments: dict[str, Any], name: str) -> str:
+    value = str(arguments.get(name) or "").strip()
+    if not value:
+        raise ValueError(f"SkillHub {name} is required for this action")
+    return value
+
+
+def _reject_irrelevant_arguments(arguments: dict[str, Any], *names: str) -> None:
+    unexpected = [name for name in names if arguments.get(name) not in (None, "")]
+    if unexpected:
+        raise ValueError(f"SkillHub action does not accept: {', '.join(unexpected)}")

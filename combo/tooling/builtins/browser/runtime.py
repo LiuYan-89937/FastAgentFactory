@@ -52,6 +52,8 @@ class BrowserSession:
     context: Any
     view_id: str = field(default_factory=lambda: uuid4().hex)
     pages: dict[str, Any] = field(default_factory=dict)
+    network_policy_sessions: dict[str, Any] = field(default_factory=dict)
+    network_policy_tasks: set[asyncio.Task[Any]] = field(default_factory=set)
     active_page_id: str | None = None
     last_used_at: float = field(default_factory=time.monotonic)
 
@@ -335,7 +337,6 @@ class BrowserRuntime:
         )
         context.set_default_timeout(self.config.default_timeout_ms)
         context.set_default_navigation_timeout(self.config.navigation_timeout_ms)
-        await context.route("**/*", self._route_request)
         await context.route_web_socket("**/*", self._route_web_socket)
         session = BrowserSession(context=context)
         self._sessions[session_key] = session
@@ -490,13 +491,13 @@ class BrowserRuntime:
         elif event_type == "text":
             await page.keyboard.insert_text(str(event.get("text") or ""))
         elif event_type == "navigate":
-            await page.goto(await self._safe_url(_text(event.get("url"))), wait_until="domcontentloaded")
+            await page.goto(await self._safe_url(_text(event.get("url"))), wait_until="commit")
         elif event_type == "reload":
-            await page.reload(wait_until="domcontentloaded")
+            await page.reload(wait_until="commit")
         elif event_type == "back":
-            await page.go_back(wait_until="domcontentloaded")
+            await page.go_back(wait_until="commit")
         elif event_type == "forward":
-            await page.go_forward(wait_until="domcontentloaded")
+            await page.go_forward(wait_until="commit")
         else:
             raise ValueError(f"unsupported browser view input: {event_type or '<empty>'}")
         session.active_page_id = page_id
@@ -512,17 +513,72 @@ class BrowserRuntime:
                 return session
         raise KeyError("unknown browser view")
 
-    async def _route_request(self, route: Any) -> None:
-        url = str(route.request.url or "")
-        if _non_network_url(url):
-            await route.continue_()
+    async def _install_network_policy(
+        self,
+        session: BrowserSession,
+        page_id: str,
+        page: Any,
+    ) -> None:
+        cdp = await session.context.new_cdp_session(page)
+
+        def on_request_paused(payload: dict[str, Any]) -> None:
+            task = asyncio.create_task(self._resolve_paused_request(cdp, payload))
+            session.network_policy_tasks.add(task)
+            task.add_done_callback(session.network_policy_tasks.discard)
+
+        cdp.on("Fetch.requestPaused", on_request_paused)
+        await cdp.send(
+            "Fetch.enable",
+            {
+                "patterns": [
+                    {"urlPattern": "http://*/*", "requestStage": "Request"},
+                    {"urlPattern": "https://*/*", "requestStage": "Request"},
+                ]
+            },
+        )
+        session.network_policy_sessions[page_id] = cdp
+
+    async def _close_network_policy(
+        self,
+        session: BrowserSession,
+        page_id: str,
+    ) -> None:
+        cdp = session.network_policy_sessions.pop(page_id, None)
+        if cdp is None:
             return
+        try:
+            await cdp.send("Fetch.disable")
+        except Exception:
+            LOGGER.debug("browser request policy disable failed", exc_info=True)
+        try:
+            await cdp.detach()
+        except Exception:
+            LOGGER.debug("browser request policy detach failed", exc_info=True)
+
+    async def _close_session_network_policy(self, session: BrowserSession) -> None:
+        tasks = tuple(session.network_policy_tasks)
+        for task in tasks:
+            task.cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+        for page_id in list(session.network_policy_sessions):
+            await self._close_network_policy(session, page_id)
+
+    async def _resolve_paused_request(self, cdp: Any, payload: dict[str, Any]) -> None:
+        request_id = str(payload.get("requestId") or "")
+        url = str((payload.get("request") or {}).get("url") or "")
         try:
             await self._safe_url(url)
         except (OSError, ValueError):
-            await route.abort("blockedbyclient")
-            return
-        await route.continue_()
+            command = "Fetch.failRequest"
+            parameters = {"requestId": request_id, "errorReason": "BlockedByClient"}
+        else:
+            command = "Fetch.continueRequest"
+            parameters = {"requestId": request_id}
+        try:
+            await cdp.send(command, parameters)
+        except Exception:
+            LOGGER.debug("browser request policy could not resolve %s", url, exc_info=True)
 
     async def _route_web_socket(self, web_socket: Any) -> None:
         try:
@@ -557,6 +613,7 @@ class BrowserRuntime:
             page = await session.context.new_page()
             effective_page_id = uuid4().hex[:16]
             session.pages[effective_page_id] = page
+            await self._install_network_policy(session, effective_page_id, page)
             page_created = True
         response = await page.goto(safe_url, wait_until=wait_until)
         session.active_page_id = effective_page_id
@@ -596,7 +653,7 @@ class BrowserRuntime:
         self, session_key: str, page_id: str | None, target: dict[str, Any]
     ) -> dict[str, Any]:
         session, effective_page_id, page = await self._active_page(session_key, page_id)
-        await self._locator(page, target).click()
+        await self._locator(page, target).click(no_wait_after=True)
         session.last_used_at = time.monotonic()
         return await self._page_after_action(session, effective_page_id, page)
 
@@ -616,7 +673,7 @@ class BrowserRuntime:
         else:
             await locator.type(text)
         if submit:
-            await locator.press("Enter")
+            await locator.press("Enter", no_wait_after=True)
         session.last_used_at = time.monotonic()
         return await self._page_after_action(session, effective_page_id, page)
 
@@ -641,7 +698,7 @@ class BrowserRuntime:
     ) -> dict[str, Any]:
         session, effective_page_id, page = await self._active_page(session_key, page_id)
         if target:
-            await self._locator(page, target).press(key)
+            await self._locator(page, target).press(key, no_wait_after=True)
         else:
             await page.keyboard.press(key)
         session.last_used_at = time.monotonic()
@@ -778,10 +835,11 @@ class BrowserRuntime:
 
     async def _tabs(self, session_key: str) -> dict[str, Any]:
         session = await self._session(session_key)
-        self._register_untracked_pages(session)
+        await self._register_untracked_pages(session)
         tabs = []
         for page_id, page in list(session.pages.items()):
             if page.is_closed():
+                await self._close_network_policy(session, page_id)
                 session.pages.pop(page_id, None)
                 continue
             tabs.append(await self._page_summary(page, page_id))
@@ -803,6 +861,7 @@ class BrowserRuntime:
             }
         if close_context:
             await self._close_view_streams(view_id=session.view_id)
+            await self._close_session_network_policy(session)
             await session.context.close()
             self._sessions.pop(session_key, None)
             return {
@@ -824,6 +883,7 @@ class BrowserRuntime:
         effective_page_id = page_id
         page = self._page(session, effective_page_id)
         await self._close_view_streams(view_id=session.view_id, page_id=effective_page_id)
+        await self._close_network_policy(session, effective_page_id)
         await page.close()
         session.pages.pop(effective_page_id, None)
         session.active_page_id = next(reversed(session.pages), None) if session.pages else None
@@ -910,7 +970,7 @@ class BrowserRuntime:
         page_id: str,
         page: Any,
     ) -> dict[str, Any]:
-        self._register_untracked_pages(session)
+        await self._register_untracked_pages(session)
         active_page_id = session.active_page_id or page_id
         active_page = session.pages.get(active_page_id, page)
         return await self._page_summary(active_page, active_page_id)
@@ -921,12 +981,14 @@ class BrowserRuntime:
         for key in stale:
             session = self._sessions.pop(key)
             await self._close_view_streams(view_id=session.view_id)
+            await self._close_session_network_policy(session)
             await session.context.close()
 
     async def _shutdown(self) -> None:
         for subscription_id in list(self._view_subscriptions):
             await self._unsubscribe_view(subscription_id)
         for session in list(self._sessions.values()):
+            await self._close_session_network_policy(session)
             await session.context.close()
         self._sessions.clear()
         if self._browser is not None:
@@ -963,13 +1025,14 @@ class BrowserRuntime:
         await self._safe_url(validation_url)
         return parsed.geturl()
 
-    def _register_untracked_pages(self, session: BrowserSession) -> None:
+    async def _register_untracked_pages(self, session: BrowserSession) -> None:
         known_pages = set(session.pages.values())
         for page in session.context.pages:
             if page in known_pages or page.is_closed():
                 continue
             page_id = uuid4().hex[:16]
             session.pages[page_id] = page
+            await self._install_network_policy(session, page_id, page)
             session.active_page_id = page_id
 
 
@@ -1005,10 +1068,6 @@ async def _assert_allowed_host(
     ):
         return
     raise ValueError(f"private or non-global browser host is not allowed: {hostname}")
-
-
-def _non_network_url(url: str) -> bool:
-    return url.startswith(("about:", "data:", "blob:"))
 
 
 def _text(value: Any) -> str:

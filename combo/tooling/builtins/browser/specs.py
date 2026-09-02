@@ -87,7 +87,7 @@ def get_browser_tool_specs() -> list[ToolSpec]:
     specs = [
         _spec(
             "browser_open",
-            "Navigate an isolated browser page to an HTTP or HTTPS URL. By default this reuses the active page. Pass page_id to navigate a specific existing page, or set new_page=true only when another simultaneous page is intentionally required. Do not open a new page for retries, redirects, or continued work on the same site. Returns a page_id for subsequent browser tools.",
+            "Navigate an isolated browser page to an HTTP or HTTPS URL. By default this reuses the active page and returns as soon as navigation is committed so the live browser can render without waiting for a heavy page to finish loading. Use browser_snapshot or browser_wait when subsequent work requires page content to be ready. Pass page_id to navigate a specific existing page, or set new_page=true only when another simultaneous page is intentionally required. Do not open a new page for retries, redirects, or continued work on the same site. Returns a page_id for subsequent browser tools.",
             {
                 "url": {"type": "string", "description": "Absolute HTTP or HTTPS URL to open."},
                 "page_id": _OPEN_PAGE_ID,
@@ -99,7 +99,7 @@ def get_browser_tool_specs() -> list[ToolSpec]:
                 "wait_until": {
                     "type": "string",
                     "enum": ["commit", "domcontentloaded", "load", "networkidle"],
-                    "default": "domcontentloaded",
+                    "default": "commit",
                     "description": "Navigation lifecycle milestone to await before returning.",
                 },
             },
@@ -141,7 +141,7 @@ def get_browser_tool_specs() -> list[ToolSpec]:
         ),
         _spec(
             "browser_click",
-            "Click an element on the active browser page.",
+            "Click an element on the active browser page. Navigation triggered by the click continues in the live browser; use browser_snapshot or browser_wait when the next action requires the destination content.",
             {"page_id": _ACTIVE_PAGE_ID, "target": deepcopy(_TARGET)},
             required=["target"],
             risk_level="medium",

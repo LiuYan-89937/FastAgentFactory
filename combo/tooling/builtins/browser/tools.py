@@ -41,7 +41,7 @@ def run(arguments: dict[str, Any], resources: dict[str, Any]) -> dict[str, Any]:
             url=_required_text(arguments, "url"),
             page_id=page_id,
             new_page=bool(arguments.get("new_page", False)),
-            wait_until=str(arguments.get("wait_until") or "domcontentloaded"),
+            wait_until=str(arguments.get("wait_until") or "commit"),
         )
     elif tool_id == "browser_snapshot":
         output = runtime.snapshot(
