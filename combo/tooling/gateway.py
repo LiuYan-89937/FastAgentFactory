@@ -30,7 +30,7 @@ from combo.tooling.approval_policy import (
 from combo.tooling.resource_context import build_tool_resource_context
 from combo.tooling.redaction import redact_json_pointer_paths
 from combo.tooling.risk import ToolRiskEvaluator, call_llm_risk_evaluator, merge_risk_results
-from combo.tooling.schema_compiler import CompiledJsonSchema
+from combo.tooling.schema_compiler import CompiledJsonSchema, validation_failure_message
 from combo.tooling.spec import ToolObservation, ToolRiskContext, ToolRiskResult, ToolSpec
 from combo.tooling.envelope import unpack_tool_envelope
 from combo.tooling.runtime_resources import resolve_resource_selector
@@ -114,7 +114,7 @@ class ToolExecutionGateway:
         if input_errors:
             return self._observation(
                 "invalid_arguments",
-                "Tool arguments failed schema validation.",
+                validation_failure_message("arguments", input_errors),
                 tool_call_id=tool_call_id,
                 arguments=arguments,
                 errors=input_errors,
@@ -238,7 +238,7 @@ class ToolExecutionGateway:
         if output_errors:
             return self._observation(
                 "invalid_output",
-                "Tool output failed schema validation.",
+                validation_failure_message("output", output_errors),
                 tool_call_id=tool_call_id,
                 arguments=arguments,
                 output=output,

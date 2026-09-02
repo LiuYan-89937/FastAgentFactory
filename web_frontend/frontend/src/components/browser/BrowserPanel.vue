@@ -97,6 +97,9 @@ interface BrowserTarget {
   pageId: string
   url: string
   title: string
+  pageState: string
+  pageStateReason: string
+  userActionRequired: boolean
 }
 
 const runtimeStore = useRuntimeStore()
@@ -205,11 +208,21 @@ watch(latestBrowserActivity, (activity) => {
   const viewId = String(output?.browser_view_id || '').trim()
   const pageId = String(output?.page_id || '').trim()
   if (!viewId || !pageId || closedPageIds.value.has(pageId)) return
+  const previousTarget = browserTargets.value.find((item) => item.pageId === pageId)
   const target = {
     viewId,
     pageId,
     url: String(output?.url || ''),
     title: String(output?.title || ''),
+    pageState: output?.page_state === undefined
+      ? previousTarget?.pageState || ''
+      : String(output.page_state || ''),
+    pageStateReason: output?.page_state_reason === undefined
+      ? previousTarget?.pageStateReason || ''
+      : String(output.page_state_reason || ''),
+    userActionRequired: output?.user_action_required === undefined
+      ? previousTarget?.userActionRequired || false
+      : Boolean(output.user_action_required),
   }
   upsertTarget(target)
   activePageId.value = target.pageId
@@ -322,8 +335,17 @@ async function renderFrame(frame: Blob, payload: Record<string, any>) {
   address.value = String(payload.url || address.value)
   title.value = String(payload.title || title.value)
   const target = currentTarget.value
-  if (target && (target.url !== address.value || target.title !== title.value)) {
-    upsertTarget({ ...target, url: address.value, title: title.value }, false)
+  if (target) {
+    upsertTarget({
+      ...target,
+      url: address.value,
+      title: title.value,
+      pageState: String(payload.page_state || target.pageState),
+      pageStateReason: String(payload.page_state_reason || target.pageStateReason),
+      userActionRequired: payload.user_action_required === undefined
+        ? target.userActionRequired
+        : Boolean(payload.user_action_required),
+    }, false)
   }
   await nextTick()
   const canvas = canvasRef.value
@@ -445,6 +467,9 @@ function synchronizeTargets(viewId: string, tabs: Array<Record<string, any>>) {
         pageId,
         url: String(tab.url || existing.get(pageId)?.url || ''),
         title: String(tab.title || existing.get(pageId)?.title || ''),
+        pageState: existing.get(pageId)?.pageState || '',
+        pageStateReason: existing.get(pageId)?.pageStateReason || '',
+        userActionRequired: existing.get(pageId)?.userActionRequired || false,
       }
     })
     .filter((target): target is BrowserTarget => target !== null)

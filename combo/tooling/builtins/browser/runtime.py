@@ -4,6 +4,7 @@ import asyncio
 import ipaddress
 import json
 import logging
+import re
 import socket
 import threading
 import time
@@ -45,15 +46,20 @@ class BrowserRuntimeConfig:
     viewport_height: int = 900
     max_snapshot_links: int = 200
     host_validation_ttl_seconds: int = 300
+    interstitial_settle_ms: int = 2_500
     executable_path: str | None = None
 
 @dataclass(slots=True)
 class BrowserSession:
     context: Any
+    locale: str
+    timezone_id: str
     view_id: str = field(default_factory=lambda: uuid4().hex)
     pages: dict[str, Any] = field(default_factory=dict)
     network_policy_sessions: dict[str, Any] = field(default_factory=dict)
     network_policy_tasks: set[asyncio.Task[Any]] = field(default_factory=set)
+    document_status_codes: dict[str, list[int]] = field(default_factory=dict)
+    page_state_cache: dict[str, tuple[tuple[int, ...], str, dict[str, Any]]] = field(default_factory=dict)
     active_page_id: str | None = None
     last_used_at: float = field(default_factory=time.monotonic)
 
@@ -72,6 +78,7 @@ class BrowserRuntime:
         self._thread.start()
         self._playwright: Any | None = None
         self._browser: Any | None = None
+        self._browser_user_agent: str | None = None
         self._sessions: dict[str, BrowserSession] = {}
         self._view_streams: dict[tuple[str, str], dict[str, Any]] = {}
         self._view_subscriptions: dict[str, tuple[str, str]] = {}
@@ -213,12 +220,16 @@ class BrowserRuntime:
         session_key: str,
         operation_timeout_ms: int,
         navigation_timeout_ms: int,
+        locale: str,
+        timezone_id: str,
     ) -> None:
         self._call(
             self._configure_session_timeouts(
                 session_key=session_key,
                 operation_timeout_ms=operation_timeout_ms,
                 navigation_timeout_ms=navigation_timeout_ms,
+                locale=locale,
+                timezone_id=timezone_id,
             )
         )
 
@@ -310,6 +321,7 @@ class BrowserRuntime:
                 launch_options["executable_path"] = self.config.executable_path
             try:
                 self._browser = await self._playwright.chromium.launch(**launch_options)
+                self._browser_user_agent = await self._resolve_browser_user_agent()
             except Exception as exc:
                 await self._playwright.stop()
                 self._playwright = None
@@ -318,7 +330,24 @@ class BrowserRuntime:
                     f"or configure COMBO_BROWSER_EXECUTABLE_PATH. Detail: {exc}"
                 ) from exc
 
-    async def _session(self, session_key: str) -> BrowserSession:
+    async def _resolve_browser_user_agent(self) -> str:
+        cdp = await self._browser.new_browser_cdp_session()
+        try:
+            version = await cdp.send("Browser.getVersion")
+        finally:
+            await cdp.detach()
+        user_agent = str(version.get("userAgent") or "").strip()
+        if not user_agent:
+            raise RuntimeError("Chromium did not report a browser user agent")
+        return _reduced_chromium_user_agent(user_agent)
+
+    async def _session(
+        self,
+        session_key: str,
+        *,
+        locale: str | None = None,
+        timezone_id: str | None = None,
+    ) -> BrowserSession:
         await self._ensure_started()
         await self._remove_idle_sessions()
         existing = self._sessions.get(session_key)
@@ -327,6 +356,8 @@ class BrowserRuntime:
             return existing
         if len(self._sessions) >= self.config.max_contexts:
             raise RuntimeError("browser context capacity is exhausted")
+        resolved_locale = _required_session_setting(locale, "browser locale")
+        resolved_timezone = _required_session_setting(timezone_id, "browser timezone")
         context = await self._browser.new_context(
             accept_downloads=True,
             service_workers="block",
@@ -334,11 +365,18 @@ class BrowserRuntime:
                 "width": self.config.viewport_width,
                 "height": self.config.viewport_height,
             },
+            user_agent=self._browser_user_agent,
+            locale=resolved_locale,
+            timezone_id=resolved_timezone,
         )
         context.set_default_timeout(self.config.default_timeout_ms)
         context.set_default_navigation_timeout(self.config.navigation_timeout_ms)
         await context.route_web_socket("**/*", self._route_web_socket)
-        session = BrowserSession(context=context)
+        session = BrowserSession(
+            context=context,
+            locale=resolved_locale,
+            timezone_id=resolved_timezone,
+        )
         self._sessions[session_key] = session
         return session
 
@@ -351,8 +389,14 @@ class BrowserRuntime:
         session_key: str,
         operation_timeout_ms: int,
         navigation_timeout_ms: int,
+        locale: str,
+        timezone_id: str,
     ) -> None:
-        session = await self._session(session_key)
+        session = await self._session(
+            session_key,
+            locale=locale,
+            timezone_id=timezone_id,
+        )
         session.context.set_default_timeout(operation_timeout_ms)
         session.context.set_default_navigation_timeout(navigation_timeout_ms)
 
@@ -376,6 +420,13 @@ class BrowserRuntime:
                     "Page.screencastFrameAck",
                     {"sessionId": payload.get("sessionId")},
                 )
+                status_codes = list(session.document_status_codes.get(page_id, ()))
+                page_state = await self._observed_page_state(
+                    session,
+                    page_id,
+                    page,
+                    status_codes,
+                )
                 frame = {
                     "type": "frame",
                     "data": payload.get("data"),
@@ -383,6 +434,8 @@ class BrowserRuntime:
                     "page_id": page_id,
                     "url": page.url,
                     "title": await page.title(),
+                    "status_code": status_codes[-1] if status_codes else 0,
+                    **page_state,
                 }
                 for subscriber in list(stream["subscribers"].values()):
                     try:
@@ -527,6 +580,16 @@ class BrowserRuntime:
             task.add_done_callback(session.network_policy_tasks.discard)
 
         cdp.on("Fetch.requestPaused", on_request_paused)
+
+        def on_response(response: Any) -> None:
+            request = response.request
+            if not request.is_navigation_request() or response.frame != page.main_frame:
+                return
+            history = session.document_status_codes.setdefault(page_id, [])
+            history.append(int(response.status))
+            del history[:-8]
+
+        page.on("response", on_response)
         await cdp.send(
             "Fetch.enable",
             {
@@ -616,11 +679,24 @@ class BrowserRuntime:
             await self._install_network_policy(session, effective_page_id, page)
             page_created = True
         response = await page.goto(safe_url, wait_until=wait_until)
+        initial_status_code = response.status if response is not None else 0
+        if initial_status_code in {401, 403, 412, 429}:
+            await page.wait_for_timeout(self.config.interstitial_settle_ms)
         session.active_page_id = effective_page_id
         session.last_used_at = time.monotonic()
+        status_codes = list(session.document_status_codes.get(effective_page_id, ()))
+        page_state = await self._observed_page_state(
+            session,
+            effective_page_id,
+            page,
+            status_codes,
+        )
         return {
             **await self._page_summary(page, effective_page_id),
-            "status_code": response.status if response is not None else 0,
+            "status_code": status_codes[-1] if status_codes else initial_status_code,
+            "initial_status_code": initial_status_code,
+            "navigation_status_codes": status_codes,
+            **page_state,
             "_page_created": page_created,
         }
 
@@ -642,11 +718,84 @@ class BrowserRuntime:
             )
         truncated = len(text) > max_chars
         session.last_used_at = time.monotonic()
+        status_codes = list(session.document_status_codes.get(effective_page_id, ()))
         return {
             **await self._page_summary(page, effective_page_id),
+            "status_code": status_codes[-1] if status_codes else 0,
+            "navigation_status_codes": status_codes,
+            **await self._observed_page_state(
+                session,
+                effective_page_id,
+                page,
+                status_codes,
+                body_text=text,
+            ),
             "text": text[:max_chars],
             "links": links,
             "truncated": truncated,
+        }
+
+    async def _observed_page_state(
+        self,
+        session: BrowserSession,
+        page_id: str,
+        page: Any,
+        status_codes: list[int],
+        *,
+        body_text: str | None = None,
+    ) -> dict[str, Any]:
+        signature = (tuple(status_codes), page.url)
+        cached = session.page_state_cache.get(page_id)
+        if body_text is None and cached is not None and cached[:2] == signature:
+            return dict(cached[2])
+        state = await self._page_state(page, status_codes, body_text=body_text)
+        session.page_state_cache[page_id] = (*signature, state)
+        return dict(state)
+
+    async def _page_state(
+        self,
+        page: Any,
+        status_codes: list[int],
+        *,
+        body_text: str | None = None,
+    ) -> dict[str, Any]:
+        latest_status = status_codes[-1] if status_codes else 0
+        verification_locator = page.locator(
+            'iframe[src*="captcha" i], iframe[src*="challenge" i], '
+            '[data-sitekey], [id*="captcha" i], [class*="captcha" i]'
+        )
+        verification_visible = False
+        if await verification_locator.count():
+            verification_visible = await verification_locator.first.is_visible()
+        if body_text is None:
+            body_text = await page.locator("body").inner_text()
+        has_visible_content = bool(body_text.strip()) or bool((await page.title()).strip())
+
+        if verification_visible or latest_status == 412:
+            state = "verification_required"
+            reason = "automation_verification_challenge"
+        elif latest_status == 400 and 412 in status_codes and not has_visible_content:
+            state = "verification_required"
+            reason = "automation_verification_rejected"
+        elif latest_status == 401:
+            state = "authentication_required"
+            reason = "authentication_required"
+        elif latest_status in {403, 429}:
+            state = "access_restricted"
+            reason = "access_restricted"
+        elif latest_status >= 400:
+            state = "http_error"
+            reason = "http_error"
+        elif not has_visible_content:
+            state = "loading"
+            reason = "page_content_not_ready"
+        else:
+            state = "ready"
+            reason = "none"
+        return {
+            "page_state": state,
+            "page_state_reason": reason,
+            "user_action_required": state in {"authentication_required", "verification_required"},
         }
 
     async def _click(
@@ -841,6 +990,8 @@ class BrowserRuntime:
             if page.is_closed():
                 await self._close_network_policy(session, page_id)
                 session.pages.pop(page_id, None)
+                session.document_status_codes.pop(page_id, None)
+                session.page_state_cache.pop(page_id, None)
                 continue
             tabs.append(await self._page_summary(page, page_id))
         return {"tabs": tabs, "active_page_id": session.active_page_id}
@@ -886,6 +1037,8 @@ class BrowserRuntime:
         await self._close_network_policy(session, effective_page_id)
         await page.close()
         session.pages.pop(effective_page_id, None)
+        session.document_status_codes.pop(effective_page_id, None)
+        session.page_state_cache.pop(effective_page_id, None)
         session.active_page_id = next(reversed(session.pages), None) if session.pages else None
         result = {
             "closed": True,
@@ -994,6 +1147,7 @@ class BrowserRuntime:
         if self._browser is not None:
             await self._browser.close()
             self._browser = None
+            self._browser_user_agent = None
         if self._playwright is not None:
             await self._playwright.stop()
             self._playwright = None
@@ -1072,3 +1226,22 @@ async def _assert_allowed_host(
 
 def _text(value: Any) -> str:
     return str(value or "").strip()
+
+
+def _required_session_setting(value: str | None, name: str) -> str:
+    normalized = _text(value)
+    if not normalized:
+        raise ValueError(f"{name} is required before opening a browser session")
+    return normalized
+
+
+def _reduced_chromium_user_agent(user_agent: str) -> str:
+    reduced, replacements = re.subn(
+        r"\b(?:HeadlessChrome|Chrome)/(\d+)(?:\.\d+){1,3}\b",
+        lambda match: f"Chrome/{match.group(1)}.0.0.0",
+        user_agent,
+        count=1,
+    )
+    if replacements != 1:
+        raise RuntimeError("Chromium reported an unsupported browser user agent")
+    return reduced

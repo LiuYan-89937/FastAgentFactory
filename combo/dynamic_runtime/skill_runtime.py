@@ -33,7 +33,7 @@ class SkillRuntime(Protocol):
 
     def describe(self, name: str) -> dict[str, object]: ...
 
-    def load(self, name: str, *, reason: str) -> dict[str, object]: ...
+    def load(self, name: str) -> dict[str, object]: ...
 
     def read_resource(self, name: str, *, path: str) -> dict[str, object]: ...
 
@@ -73,16 +73,12 @@ class IndexedSkillRuntime:
             "instructions_loaded": False,
         }
 
-    def load(self, name: str, *, reason: str) -> dict[str, object]:
+    def load(self, name: str) -> dict[str, object]:
         entry = self._require(name)
-        rationale = str(reason or "").strip()
-        if not rationale:
-            raise ValueError("Skill load requires a reason")
         return {
             **self._metadata(entry),
             "instructions": self._blobs.read_text(entry.definition.instructions),
             "resources": [_resource_metadata(item) for item in entry.definition.contents],
-            "load_reason": rationale,
         }
 
     def read_resource(self, name: str, *, path: str) -> dict[str, object]:

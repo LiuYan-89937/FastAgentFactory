@@ -5,6 +5,7 @@ import importlib
 from typing import Any, Literal, Union
 
 from pydantic import BaseModel, ConfigDict, Field, create_model
+from jsonschema.exceptions import best_match
 
 
 class ToolSchemaError(ValueError):
@@ -19,7 +20,7 @@ class CompiledJsonSchema:
 
     def errors_for(self, value: Any) -> list[str]:
         errors = sorted(self.validator.iter_errors(value), key=lambda item: list(item.path))
-        return [_format_error(error) for error in errors]
+        return list(dict.fromkeys(_format_error(error) for error in errors))
 
     def validate(self, value: Any) -> None:
         errors = self.errors_for(value)
@@ -133,7 +134,53 @@ def _annotation_for_schema(schema: dict[str, Any], model_name: str) -> Any:
 
 
 def _format_error(error: Any) -> str:
-    location = ".".join(str(part) for part in error.path)
-    if not location:
-        location = "<root>"
-    return f"{location}: {error.message}"
+    if error.context:
+        return _format_error(best_match(error.context))
+    path = [str(part) for part in error.path]
+    if error.validator == "required" and isinstance(error.instance, dict):
+        missing = [str(name) for name in error.validator_value if name not in error.instance]
+        if len(missing) == 1:
+            return f"{_location([*path, missing[0]])}: required property is missing"
+    location = _location(path)
+    validator = str(error.validator or "schema")
+    constraint = error.validator_value
+    messages = {
+        "type": f"expected type {constraint}",
+        "enum": f"must be one of {constraint}",
+        "const": f"must equal {constraint!r}",
+        "pattern": f"must match pattern {constraint!r}",
+        "minimum": f"must be at least {constraint}",
+        "maximum": f"must be at most {constraint}",
+        "exclusiveMinimum": f"must be greater than {constraint}",
+        "exclusiveMaximum": f"must be less than {constraint}",
+        "minLength": f"must contain at least {constraint} characters",
+        "maxLength": f"must contain at most {constraint} characters",
+        "minItems": f"must contain at least {constraint} items",
+        "maxItems": f"must contain at most {constraint} items",
+        "additionalProperties": "contains properties that are not allowed",
+    }
+    return f"{location}: {messages.get(validator, f'failed schema constraint {validator!r}')}"
+
+
+def validation_failure_message(subject: str, errors: list[str]) -> str:
+    normalized_subject = str(subject or "value").strip()
+    details = "; ".join(str(error).strip() for error in errors if str(error).strip())
+    prefix = f"Tool {normalized_subject} failed schema validation"
+    return f"{prefix}: {details}." if details else f"{prefix}."
+
+
+def pydantic_validation_errors(error: Any) -> list[str]:
+    try:
+        items = error.errors(include_url=False, include_context=False, include_input=False)
+    except (AttributeError, TypeError):
+        return [f"<root>: {type(error).__name__}"]
+    formatted: list[str] = []
+    for item in items:
+        location = _location([str(part) for part in item.get("loc") or ()])
+        message = str(item.get("msg") or item.get("type") or "validation failed").strip()
+        formatted.append(f"{location}: {message}")
+    return formatted
+
+
+def _location(path: list[str]) -> str:
+    return ".".join(path) if path else "<root>"

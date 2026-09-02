@@ -32,6 +32,8 @@ def run(arguments: dict[str, Any], resources: dict[str, Any]) -> dict[str, Any]:
         session_key=session_key,
         operation_timeout_ms=identity.browser_operation_timeout_ms,
         navigation_timeout_ms=identity.browser_navigation_timeout_ms,
+        locale=identity.locale,
+        timezone_id=identity.timezone,
     )
     page_id = _optional_text(arguments.get("page_id"))
 

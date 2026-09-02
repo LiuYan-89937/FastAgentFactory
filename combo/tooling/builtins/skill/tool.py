@@ -17,7 +17,7 @@ def run(arguments: dict[str, Any], resources: dict[str, Any]) -> dict[str, Any]:
     elif action == "describe":
         output = {"action": action, "skill": runtime.describe(_required(arguments, "name"))}
     elif action == "load":
-        output = {"action": action, "skill": runtime.load(_required(arguments, "name"), reason=_required(arguments, "reason"))}
+        output = {"action": action, "skill": runtime.load(_required(arguments, "name"))}
     elif action == "read_resource":
         output = {"action": action, "resource": runtime.read_resource(_required(arguments, "name"), path=_required(arguments, "path"))}
     else:

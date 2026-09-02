@@ -29,6 +29,8 @@ def runtime_execution_identity(instance: RuntimeInstance) -> RuntimeExecutionIde
         task_revision=request.task_revision,
         browser_operation_timeout_ms=request.policy_snapshot.browser_operation_timeout_ms,
         browser_navigation_timeout_ms=request.policy_snapshot.browser_navigation_timeout_ms,
+        locale=request.policy_snapshot.locale,
+        timezone=request.policy_snapshot.timezone,
         context_compression_detail=request.policy_snapshot.context_compression_detail,
         context_compression_keep_recent_messages=(
             request.policy_snapshot.context_compression_keep_recent_messages

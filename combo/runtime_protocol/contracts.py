@@ -543,6 +543,8 @@ class RuntimeExecutionIdentity(FrozenProtocolModel):
     task_revision: int = Field(ge=1)
     browser_operation_timeout_ms: int = Field(ge=1_000)
     browser_navigation_timeout_ms: int = Field(ge=1_000)
+    locale: RuntimeLocale
+    timezone: str
     context_compression_detail: ContextCompressionDetail = "standard"
     context_compression_keep_recent_messages: int = Field(default=12, ge=0, le=128)
     memory_agent_write_enabled: bool = True
@@ -556,10 +558,16 @@ class RuntimeExecutionIdentity(FrozenProtocolModel):
         "session_id",
         "turn_id",
         "workspace_id",
+        "timezone",
     )
     @classmethod
     def _required_identity_text(cls, value: str, info: Any) -> str:
         return _required_text(value, info.field_name)
+
+    @field_validator("locale", mode="before")
+    @classmethod
+    def _identity_locale_is_supported(cls, value: object) -> RuntimeLocale:
+        return normalize_runtime_locale(value)
 
     @field_validator("parent_runtime_instance_id", "task_id", "delegation_grant_id", "scheduler_run_id")
     @classmethod

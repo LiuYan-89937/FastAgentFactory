@@ -19,7 +19,11 @@ from combo.tooling.output_store import (
     ToolOutputPolicy,
     ToolOutputStore,
 )
-from combo.tooling.schema_compiler import compile_json_schema
+from combo.tooling.schema_compiler import (
+    compile_json_schema,
+    pydantic_validation_errors,
+    validation_failure_message,
+)
 from combo.tooling.spec import ToolSpec
 
 
@@ -121,17 +125,7 @@ class ToolCompiler:
                     "description_context": spec.description_context.model_dump(mode="json"),
                 }
             },
-            handle_validation_error=lambda error: json.dumps(
-                {
-                    "type": "tool_observation",
-                    "status": "invalid_arguments",
-                    "tool_id": spec.id,
-                    "message": "Tool arguments failed transport validation.",
-                    "retryable": True,
-                    "errors": [str(error)],
-                },
-                ensure_ascii=False,
-            ),
+            handle_validation_error=lambda error: _transport_validation_observation(spec, error),
         )
 
     def compile_delegated_resolved(
@@ -181,18 +175,23 @@ class ToolCompiler:
                     "delegated_execution": True,
                 }
             },
-            handle_validation_error=lambda error: json.dumps(
-                {
-                    "type": "tool_observation",
-                    "status": "invalid_arguments",
-                    "tool_id": spec.id,
-                    "message": "Tool arguments failed transport validation.",
-                    "retryable": True,
-                    "errors": [str(error)],
-                },
-                ensure_ascii=False,
-            ),
+            handle_validation_error=lambda error: _transport_validation_observation(spec, error),
         )
+
+
+def _transport_validation_observation(spec: ToolSpec, error: Any) -> str:
+    errors = pydantic_validation_errors(error)
+    return json.dumps(
+        {
+            "type": "tool_observation",
+            "status": "invalid_arguments",
+            "tool_id": spec.id,
+            "message": validation_failure_message("arguments", errors),
+            "retryable": True,
+            "errors": errors,
+        },
+        ensure_ascii=False,
+    )
 
 def _normalize_tool_arguments(value: Any) -> Any:
     if isinstance(value, BaseModel):

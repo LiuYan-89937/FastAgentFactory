@@ -42,6 +42,23 @@ _PAGE_RESULT_PROPERTIES = {
     "url": _STRING,
     "title": _STRING,
 }
+_PAGE_STATE_PROPERTIES = {
+    "status_code": {"type": "integer"},
+    "navigation_status_codes": {"type": "array", "items": {"type": "integer"}},
+    "page_state": {
+        "type": "string",
+        "enum": [
+            "ready",
+            "loading",
+            "authentication_required",
+            "verification_required",
+            "access_restricted",
+            "http_error",
+        ],
+    },
+    "page_state_reason": _STRING,
+    "user_action_required": {"type": "boolean"},
+}
 
 
 def _spec(
@@ -87,7 +104,7 @@ def get_browser_tool_specs() -> list[ToolSpec]:
     specs = [
         _spec(
             "browser_open",
-            "Navigate an isolated browser page to an HTTP or HTTPS URL. By default this reuses the active page and returns as soon as navigation is committed so the live browser can render without waiting for a heavy page to finish loading. Use browser_snapshot or browser_wait when subsequent work requires page content to be ready. Pass page_id to navigate a specific existing page, or set new_page=true only when another simultaneous page is intentionally required. Do not open a new page for retries, redirects, or continued work on the same site. Returns a page_id for subsequent browser tools.",
+            "Navigate an isolated browser page to an HTTP or HTTPS URL. By default this reuses the active page and returns as soon as ordinary navigation is committed; suspected access interstitials receive one bounded stabilization wait. Inspect page_state before drawing conclusions. When page_state is verification_required or authentication_required, immediately stop all browser operations, tell the user in the main conversation to take control and complete the step manually, then end the current response and wait for the user. Do not retry or call another browser tool until the user confirms completion. After confirmation, call browser_snapshot once to verify the resulting page before continuing. Neither state proves that the website is unavailable. Pass page_id to navigate a specific existing page, or set new_page=true only when another simultaneous page is intentionally required.",
             {
                 "url": {"type": "string", "description": "Absolute HTTP or HTTPS URL to open."},
                 "page_id": _OPEN_PAGE_ID,
@@ -104,14 +121,22 @@ def get_browser_tool_specs() -> list[ToolSpec]:
                 },
             },
             required=["url"],
-            output_properties={**_PAGE_RESULT_PROPERTIES, "status_code": {"type": "integer"}},
-            output_required=[*list(_PAGE_RESULT_PROPERTIES), "status_code"],
+            output_properties={
+                **_PAGE_RESULT_PROPERTIES,
+                **_PAGE_STATE_PROPERTIES,
+                "initial_status_code": {"type": "integer"},
+            },
+            output_required=[
+                *list(_PAGE_RESULT_PROPERTIES),
+                *list(_PAGE_STATE_PROPERTIES),
+                "initial_status_code",
+            ],
             risk_level="medium",
             effects=("network", "external_side_effect"),
         ),
         _spec(
             "browser_snapshot",
-            "Read the current page as structured text and optionally list its links. Use this before interacting when the page state is uncertain.",
+            "Read the current page state, structured text, and optional links. Use this before interacting when page state is uncertain and once after the user confirms that manual sign-in or human verification is complete. If verification_required or authentication_required remains, stop browser operations, notify the user, end the current response, and wait. Do not repeatedly retry browser tools. A verification failure in the isolated browser is not evidence that the website itself is unavailable.",
             {
                 "page_id": _ACTIVE_PAGE_ID,
                 "max_chars": {
@@ -125,6 +150,7 @@ def get_browser_tool_specs() -> list[ToolSpec]:
             },
             output_properties={
                 **_PAGE_RESULT_PROPERTIES,
+                **_PAGE_STATE_PROPERTIES,
                 "text": _STRING,
                 "links": {
                     "type": "array",
@@ -137,7 +163,13 @@ def get_browser_tool_specs() -> list[ToolSpec]:
                 },
                 "truncated": {"type": "boolean"},
             },
-            output_required=[*list(_PAGE_RESULT_PROPERTIES), "text", "links", "truncated"],
+            output_required=[
+                *list(_PAGE_RESULT_PROPERTIES),
+                *list(_PAGE_STATE_PROPERTIES),
+                "text",
+                "links",
+                "truncated",
+            ],
         ),
         _spec(
             "browser_click",
