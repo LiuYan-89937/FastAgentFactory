@@ -1,39 +1,50 @@
 from __future__ import annotations
 
-from combo.models.adapters.anthropic import AnthropicChatAdapter
-from combo.models.adapters.base import ChatModelAdapter
-from combo.models.adapters.deepseek import DeepSeekChatAdapter
-from combo.models.adapters.hunyuan import HunyuanChatAdapter
-from combo.models.adapters.kimi import KimiChatAdapter
-from combo.models.adapters.mimo import MiMoChatAdapter
-from combo.models.adapters.minimax import MiniMaxChatAdapter
-from combo.models.adapters.openai_chat import (
-    GenericOpenAICompatibleChatAdapter,
-    OpenAIChatAdapter,
-)
-from combo.models.adapters.openai_responses import GenericOpenAIResponsesAdapter
-from combo.models.adapters.qwen import QwenChatAdapter
-from combo.models.adapters.zhipu import ZhipuChatAdapter
+from dataclasses import dataclass
+from importlib import import_module
+from typing import TYPE_CHECKING, Any, cast
+
 from combo.models.capabilities import ProviderProfile
+
+if TYPE_CHECKING:
+    from combo.models.adapters.base import ChatModelAdapter
+
+
+@dataclass(frozen=True, slots=True)
+class _AdapterSpec:
+    module: str
+    class_name: str
 
 
 def adapter_for_profile(profile: ProviderProfile) -> ChatModelAdapter:
-    adapter_type = _ADAPTERS.get(profile.adapter_id)
-    if adapter_type is None:
+    spec = _ADAPTER_SPECS.get(profile.adapter_id)
+    if spec is None:
         raise ValueError(f"unsupported chat model adapter: {profile.adapter_id}")
-    return adapter_type(profile)
+    module = import_module(spec.module)
+    adapter_type: Any = getattr(module, spec.class_name, None)
+    if not isinstance(adapter_type, type):
+        raise TypeError(
+            f"chat model adapter {profile.adapter_id} does not expose {spec.class_name}"
+        )
+    return cast("type[ChatModelAdapter]", adapter_type)(profile)
 
 
-_ADAPTERS = {
-    "openai_chat": OpenAIChatAdapter,
-    "openai_compatible_chat": GenericOpenAICompatibleChatAdapter,
-    "openai_responses": GenericOpenAIResponsesAdapter,
-    "anthropic": AnthropicChatAdapter,
-    "deepseek": DeepSeekChatAdapter,
-    "qwen": QwenChatAdapter,
-    "zhipu": ZhipuChatAdapter,
-    "kimi": KimiChatAdapter,
-    "minimax": MiniMaxChatAdapter,
-    "mimo": MiMoChatAdapter,
-    "hunyuan": HunyuanChatAdapter,
+_ADAPTER_SPECS = {
+    "openai_chat": _AdapterSpec("combo.models.adapters.openai_chat", "OpenAIChatAdapter"),
+    "openai_compatible_chat": _AdapterSpec(
+        "combo.models.adapters.openai_chat",
+        "GenericOpenAICompatibleChatAdapter",
+    ),
+    "openai_responses": _AdapterSpec(
+        "combo.models.adapters.openai_responses",
+        "GenericOpenAIResponsesAdapter",
+    ),
+    "anthropic": _AdapterSpec("combo.models.adapters.anthropic", "AnthropicChatAdapter"),
+    "deepseek": _AdapterSpec("combo.models.adapters.deepseek", "DeepSeekChatAdapter"),
+    "qwen": _AdapterSpec("combo.models.adapters.qwen", "QwenChatAdapter"),
+    "zhipu": _AdapterSpec("combo.models.adapters.zhipu", "ZhipuChatAdapter"),
+    "kimi": _AdapterSpec("combo.models.adapters.kimi", "KimiChatAdapter"),
+    "minimax": _AdapterSpec("combo.models.adapters.minimax", "MiniMaxChatAdapter"),
+    "mimo": _AdapterSpec("combo.models.adapters.mimo", "MiMoChatAdapter"),
+    "hunyuan": _AdapterSpec("combo.models.adapters.hunyuan", "HunyuanChatAdapter"),
 }

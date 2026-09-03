@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from typing import Any, Protocol
-
-from langchain_core.language_models.chat_models import BaseChatModel
+from typing import TYPE_CHECKING, Any, Protocol
 
 from combo.models.capabilities import ProviderProfile
-from combo.models.openai_compat import ThinkingCompatibleChatOpenAI
+
+if TYPE_CHECKING:
+    from langchain_core.language_models.chat_models import BaseChatModel
 
 
 class ProviderAdapterError(RuntimeError):
@@ -64,7 +64,7 @@ class OpenAIChatCompletionsAdapter(OpenAICompatibleAdapter):
             kwargs["extra_body"] = extra_body
         if self._should_preserve_reasoning_content(settings):
             kwargs["preserve_reasoning_content"] = True
-        return ThinkingCompatibleChatOpenAI(**kwargs)
+        return _create_openai_compatible_chat_model(**kwargs)
 
     def extra_body(self, settings: Any) -> dict[str, Any]:
         return {}
@@ -93,7 +93,7 @@ class OpenAIResponsesAdapter(OpenAICompatibleAdapter):
         if reasoning:
             kwargs["reasoning"] = reasoning
             kwargs["include"] = ["reasoning.encrypted_content"]
-        return ThinkingCompatibleChatOpenAI(**kwargs)
+        return _create_openai_compatible_chat_model(**kwargs)
 
     def _reasoning_parameters(self, settings: Any) -> dict[str, str]:
         reasoning = getattr(settings, "reasoning", None)
@@ -109,6 +109,12 @@ class OpenAIResponsesAdapter(OpenAICompatibleAdapter):
 
 def reasoning_enabled(settings: Any) -> bool | None:
     return getattr(getattr(settings, "reasoning", None), "enabled", None)
+
+
+def _create_openai_compatible_chat_model(**kwargs: Any) -> BaseChatModel:
+    from combo.models.openai_compat import ThinkingCompatibleChatOpenAI
+
+    return ThinkingCompatibleChatOpenAI(**kwargs)
 
 
 def reasoning_effort(settings: Any) -> str | None:

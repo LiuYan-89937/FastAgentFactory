@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 import json
 import logging
 import threading
+from time import perf_counter
 from typing import Any, Literal, Protocol
 
 from langchain_core.messages import BaseMessage, messages_from_dict, messages_to_dict
@@ -401,9 +402,16 @@ class DynamicRuntimeService:
             snapshot = self._runtime_instances.capability_snapshot(claimed_instance.capability_snapshot_id)
             if snapshot.snapshot_id != claimed_instance.request.capability_snapshot_id:
                 raise RuntimeError("runtime instance and capability snapshot identities differ")
+            materialization_started_at = perf_counter()
             tool_registry_lease = self._service_set.snapshot_tool_registries.materialize(
                 capability_snapshot=snapshot,
                 runtime_instance=claimed_instance,
+            )
+            logger.info(
+                "Runtime tool surface materialized: runtime_instance_id=%s tool_count=%d elapsed_ms=%.1f",
+                claimed_instance.runtime_instance_id,
+                len(snapshot.tool_ids),
+                (perf_counter() - materialization_started_at) * 1000,
             )
             canonical_messages, current_user_message = self._runtime_input(claimed_instance)
             graph = self._service_set.graph_for(claimed_instance.request.strategy)

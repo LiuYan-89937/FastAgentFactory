@@ -17,6 +17,7 @@ from web_frontend.backend.event_loop_watchdog import EventLoopWatchdog
 from web_frontend.backend.frontend_origins import allowed_frontend_origins
 
 if TYPE_CHECKING:
+    from combo.runtime_protocol import RuntimeProtocolDescriptor
     from web_frontend.backend.runtime_backend import RuntimeBackend, RuntimeBackendConfig
 
 
@@ -166,16 +167,28 @@ async def _initialize_runtime(
     backend: RuntimeBackend | None = None
     try:
         state.set_phase("loading_runtime_modules")
-        from combo.runtime_protocol import RuntimeProtocolDescriptor
-        from web_frontend.backend.runtime_backend import RuntimeBackend, RuntimeBackendConfig
-
-        runtime_config = config or RuntimeBackendConfig.local()
+        module_loading_started_at = monotonic()
+        (
+            protocol_descriptor_type,
+            runtime_backend_type,
+            runtime_backend_config_type,
+        ) = await asyncio.to_thread(_load_runtime_components)
+        logger.info(
+            "Runtime modules loaded in %.1f ms",
+            (monotonic() - module_loading_started_at) * 1000,
+        )
+        runtime_config = config or runtime_backend_config_type.local()
         state.set_phase("constructing_runtime")
+        construction_started_at = monotonic()
         backend = await asyncio.to_thread(
-            RuntimeBackend,
+            runtime_backend_type,
             runtime_config,
             logger,
             state.set_phase,
+        )
+        logger.info(
+            "Runtime backend constructed in %.1f ms",
+            (monotonic() - construction_started_at) * 1000,
         )
         state.attach_backend(backend)
         if state.stopping:
@@ -184,7 +197,7 @@ async def _initialize_runtime(
         backend.frontend_events.start(loop)
         backend.start()
         runtime_application = _build_runtime_application(backend)
-        descriptor = RuntimeProtocolDescriptor(build_revision=backend.config.build_revision)
+        descriptor = protocol_descriptor_type(build_revision=backend.config.build_revision)
         state.ready(
             backend=backend,
             application=runtime_application,
@@ -200,6 +213,18 @@ async def _initialize_runtime(
                 await backend.stop()
             finally:
                 backend.frontend_events.stop()
+
+
+def _load_runtime_components() -> tuple[
+    type[RuntimeProtocolDescriptor],
+    type[RuntimeBackend],
+    type[RuntimeBackendConfig],
+]:
+    """Load the runtime graph away from the ASGI event loop."""
+    from combo.runtime_protocol import RuntimeProtocolDescriptor
+    from web_frontend.backend.runtime_backend import RuntimeBackend, RuntimeBackendConfig
+
+    return RuntimeProtocolDescriptor, RuntimeBackend, RuntimeBackendConfig
 
 
 def _build_runtime_application(backend: RuntimeBackend) -> FastAPI:

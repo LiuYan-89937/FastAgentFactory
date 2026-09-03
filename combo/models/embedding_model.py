@@ -6,7 +6,6 @@ import os
 from typing import TYPE_CHECKING, Any
 
 from langchain_core.embeddings import Embeddings
-from langchain_openai import OpenAIEmbeddings
 
 from combo.model_pool.defaults import DEFAULT_EMBEDDING_BATCH_SIZE
 
@@ -99,6 +98,8 @@ def _get_embedding_model() -> Embeddings | None:
 def _create_embedding_model(settings: EmbeddingModelSettings) -> Embeddings | None:
     if not settings.available:
         return None
+    from langchain_openai import OpenAIEmbeddings
+
     kwargs: dict[str, Any] = {
         "model": settings.model,
         "api_key": settings.api_key,
