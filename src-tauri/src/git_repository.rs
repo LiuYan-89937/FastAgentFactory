@@ -14,6 +14,8 @@ use crate::github_account::github_access_token;
 
 const MAX_DIFF_TEXT_BYTES: usize = 2 * 1024 * 1024;
 const PULL_REQUIRES_CLEAN_WORKTREE: &str = "git_pull_requires_clean_worktree";
+// Runtime attachment storage, defined by workspace_attachment_root in runtime_attachments.py.
+const WORKSPACE_INPUT_DIRECTORY: &str = ".agent/input_files";
 
 #[derive(Serialize)]
 pub struct GitRepositoryStatus {
@@ -1118,11 +1120,16 @@ fn create_worktree_snapshot(
 ) -> Result<git2::Oid, String> {
     let mut index = repo.index().map_err(error_text)?;
     index.read(true).map_err(error_text)?;
+    let mut include_review_file = |path: &Path, _matched: &[u8]| {
+        i32::from(is_workspace_input_path(path))
+    };
     index
-        .add_all(["*"], IndexAddOption::DEFAULT, None)
+        .add_all(["*"], IndexAddOption::DEFAULT, Some(&mut include_review_file))
         .map_err(error_text)?;
-    index.update_all(["*"], None).map_err(error_text)?;
-    let tree_oid = index.write_tree_to(repo).map_err(error_text)?;
+    index
+        .update_all(["*"], Some(&mut include_review_file))
+        .map_err(error_text)?;
+    let tree_oid = write_turn_review_tree(repo, &mut index)?;
     let tree = repo.find_tree(tree_oid).map_err(error_text)?;
     let signature = Signature::now("Combo", "snapshot@combo.local").map_err(error_text)?;
     let parent = parent_oid
@@ -1185,10 +1192,29 @@ fn snapshot_tree<'repo>(
     reference: &str,
 ) -> Result<git2::Tree<'repo>, String> {
     let oid = reference_target(repo, reference)?;
-    repo.find_commit(oid)
+    let tree = repo.find_commit(oid)
         .map_err(error_text)?
         .tree()
-        .map_err(error_text)
+        .map_err(error_text)?;
+    let mut index = git2::Index::new().map_err(error_text)?;
+    index.read_tree(&tree).map_err(error_text)?;
+    let review_tree = write_turn_review_tree(repo, &mut index)?;
+    repo.find_tree(review_tree).map_err(error_text)
+}
+
+fn is_workspace_input_path(path: &Path) -> bool {
+    path.ancestors()
+        .any(|ancestor| ancestor.ends_with(WORKSPACE_INPUT_DIRECTORY))
+}
+
+fn write_turn_review_tree(repo: &Repository, index: &mut git2::Index) -> Result<git2::Oid, String> {
+    let mut remove_input_file = |path: &Path, _matched: &[u8]| {
+        i32::from(!is_workspace_input_path(path))
+    };
+    index
+        .remove_all(["*"], Some(&mut remove_input_file))
+        .map_err(error_text)?;
+    index.write_tree_to(repo).map_err(error_text)
 }
 
 fn reference_target(repo: &Repository, reference: &str) -> Result<git2::Oid, String> {
