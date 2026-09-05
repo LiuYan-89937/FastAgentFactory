@@ -9,7 +9,6 @@
             </div>
             <div class="group-title-block">
               <div class="group-title">{{ t('settings.groupConversation') }}</div>
-              <div class="group-desc">{{ t('settings.groupConversationDesc') }}</div>
             </div>
           </header>
 
@@ -17,7 +16,6 @@
             <div class="field-row">
               <div class="field-copy">
                 <label class="field-label">{{ t('settings.runningMessageMode') }}</label>
-                <p class="field-hint">{{ t('settings.runningMessageModeHint') }}</p>
               </div>
               <n-radio-group v-model:value="runningMessageMode" size="small" class="field-control soft-segmented-control">
                 <n-radio-button value="queue">{{ t('settings.runningMessageQueue') }}</n-radio-button>
@@ -36,7 +34,6 @@
             </div>
             <div class="group-title-block">
               <div class="group-title">{{ t('settings.groupAppearance') }}</div>
-              <div class="group-desc">{{ t('settings.groupAppearanceDesc') }}</div>
             </div>
           </header>
 
@@ -78,7 +75,6 @@
             </div>
             <div class="group-title-block">
               <div class="group-title">{{ t('settings.groupNotifications') }}</div>
-              <div class="group-desc">{{ t('settings.groupNotificationsDesc') }}</div>
             </div>
           </header>
 
@@ -86,7 +82,6 @@
             <div class="field-row">
               <div class="field-copy">
                 <label class="field-label">{{ t('settings.taskNotifications') }}</label>
-                <p class="field-hint">{{ t('settings.taskNotificationsHint') }}</p>
               </div>
               <n-switch
                 :value="taskNotificationPreferences.enabled"
@@ -118,7 +113,6 @@
             </div>
             <div class="group-title-block">
               <div class="group-title">{{ t('settings.groupMemory') }}</div>
-              <div class="group-desc">{{ t('settings.groupMemoryDesc') }}</div>
             </div>
           </header>
 
@@ -126,7 +120,6 @@
             <div class="field-row">
               <div class="field-copy">
                 <label class="field-label">{{ t('settings.memoryAutoWrite') }}</label>
-                <p class="field-hint">{{ t('settings.memoryAutoWriteHint') }}</p>
               </div>
               <n-switch v-model:value="memoryAutoWriteEnabled" />
             </div>
@@ -145,7 +138,6 @@
             <div class="field-row">
               <div class="field-copy">
                 <label class="field-label">{{ t('settings.memoryAgentWrite') }}</label>
-                <p class="field-hint">{{ t('settings.memoryAgentWriteHint') }}</p>
               </div>
               <n-switch v-model:value="memoryAgentWriteEnabled" />
             </div>
@@ -160,7 +152,6 @@
             <div class="field-block">
               <label class="field-label">{{ t('settings.memoryMaxTokens') }}</label>
               <n-input-number v-model:value="memoryMaxInjectedTokens" class="field-input" :min="100" :max="32000" :step="100" :precision="0" />
-              <p class="field-hint">{{ t('settings.memoryInjectionAlwaysOnHint') }}</p>
             </div>
           </div>
         </section>
@@ -172,7 +163,6 @@
             </div>
             <div class="group-title-block">
               <div class="group-title">{{ t('settings.groupRuntime') }}</div>
-              <div class="group-desc">{{ t('settings.groupRuntimeDesc') }}</div>
             </div>
           </header>
 
@@ -180,7 +170,6 @@
             <div class="field-row">
               <div class="field-copy">
                 <label class="field-label">{{ t('settings.modelPool') }}</label>
-                <p class="field-hint">{{ t('settings.modelPoolHint') }}</p>
               </div>
               <n-button secondary @click="openModelPool">{{ t('settings.manageModelPool') }}</n-button>
             </div>
@@ -190,7 +179,6 @@
             <div class="field-row">
               <div class="field-copy">
                 <label class="field-label">{{ t('settings.mainAgentCapabilities') }}</label>
-                <p class="field-hint">{{ t('settings.mainAgentCapabilitiesHint') }}</p>
               </div>
               <n-button secondary @click="openMainAgentCapabilities">{{ t('settings.manageCapabilities') }}</n-button>
             </div>
@@ -200,7 +188,6 @@
             <div class="field-row">
               <div class="field-copy">
                 <label class="field-label">{{ t('settings.contextCompressionDetail') }}</label>
-                <p class="field-hint">{{ t('settings.contextCompressionDetailHint') }}</p>
               </div>
               <n-radio-group v-model:value="contextCompressionDetail" size="small" class="field-control soft-segmented-control">
                 <n-radio-button value="concise">{{ t('settings.contextCompressionConcise') }}</n-radio-button>
@@ -222,7 +209,6 @@
               >
                 <template #suffix>{{ t('settings.messages') }}</template>
               </n-input-number>
-              <p class="field-hint">{{ t('settings.contextCompressionKeepRecentHint') }}</p>
             </div>
 
             <div class="field-divider" aria-hidden="true"></div>
@@ -242,7 +228,6 @@
               >
                 <template #suffix>{{ t('settings.milliseconds') }}</template>
               </n-input-number>
-              <p class="field-hint">{{ t('settings.browserOperationTimeoutHint') }}</p>
             </div>
 
             <div class="field-divider" aria-hidden="true"></div>
@@ -262,7 +247,6 @@
               >
                 <template #suffix>{{ t('settings.milliseconds') }}</template>
               </n-input-number>
-              <p class="field-hint">{{ t('settings.browserNavigationTimeoutHint') }}</p>
             </div>
 
             <div class="field-divider" aria-hidden="true"></div>
@@ -280,7 +264,6 @@
               >
                 <template #suffix>{{ t('settings.seconds') }}</template>
               </n-input-number>
-              <p class="field-hint">{{ t('settings.requestTimeoutHint') }}</p>
             </div>
 
             <div class="field-divider" aria-hidden="true"></div>
@@ -297,7 +280,6 @@
                 :precision="0"
                 :show-button="true"
               />
-              <p class="field-hint">{{ t('settings.maxRetriesHint') }}</p>
             </div>
 
             <div class="field-divider" aria-hidden="true"></div>
@@ -314,7 +296,6 @@
                 :precision="0"
                 :show-button="true"
               />
-              <p class="field-hint">{{ t('settings.maxParallelSubAgentsHint') }}</p>
               <p v-if="runtimePreferences.maxParallelSubAgentsSaveFailed" class="field-error">
                 {{ t('settings.maxParallelSubAgentsSaveFailed') }}
               </p>
@@ -329,7 +310,6 @@
             </div>
             <div class="group-title-block">
               <div class="group-title">{{ t('settings.groupKnowledgeRetrieval') }}</div>
-              <div class="group-desc">{{ t('settings.groupKnowledgeRetrievalDesc') }}</div>
             </div>
           </header>
 
@@ -337,7 +317,6 @@
             <div class="field-block">
               <label class="field-label">{{ t('settings.knowledgeResultLimit') }}</label>
               <n-input-number v-model:value="knowledgeSettings.result_limit" class="field-input" :min="1" :max="50" :precision="0" />
-              <p class="field-hint">{{ t('settings.knowledgeResultLimitHint') }}</p>
             </div>
             <p v-if="knowledgeSettingsError" class="field-error">{{ knowledgeSettingsError }}</p>
             <div class="settings-action-row">
@@ -355,7 +334,6 @@
             </div>
             <div class="group-title-block">
               <div class="group-title">{{ t('settings.groupData') }}</div>
-              <div class="group-desc">{{ t('settings.groupDataDesc') }}</div>
             </div>
           </header>
 
@@ -363,7 +341,7 @@
             <div class="field-row">
               <div class="field-copy">
                 <label class="field-label">{{ t('settings.conversationStorage') }}</label>
-                <p class="field-hint">{{ conversationUsageText }}</p>
+                <p class="field-status">{{ conversationUsageText }}</p>
               </div>
               <n-button
                 type="error"
@@ -389,22 +367,24 @@
               <span>Combo</span>
               <span class="footer-version">v{{ appUpdateStore.currentVersion || '—' }}</span>
             </div>
-            <n-button
-              size="small"
-              secondary
-              :loading="appUpdateStore.status === 'checking'"
-              @click="checkForUpdates"
-            >
-              <template #icon>
-                <n-icon><Refresh /></n-icon>
-              </template>
-              {{ t('settings.checkForUpdates') }}
-            </n-button>
+            <div class="footer-actions">
+              <n-button
+                size="small"
+                secondary
+                :loading="appUpdateStore.status === 'checking'"
+                @click="checkForUpdates"
+              >
+                <template #icon>
+                  <n-icon><Refresh /></n-icon>
+                </template>
+                {{ t('settings.checkForUpdates') }}
+              </n-button>
+              <ErrorReportButton />
+            </div>
           </div>
           <div v-if="updateCheckMessage" class="footer-update-status" role="status">
             {{ updateCheckMessage }}
           </div>
-          <div class="footer-desc">{{ t('settings.description') }}</div>
         </footer>
       </div>
     </n-drawer-content>
@@ -439,6 +419,7 @@ import { requestNativeTaskNotificationPermission } from '@/services/taskNotifica
 import { useAppUpdateStore } from '@/stores/appUpdate'
 import { storageApi, type ConversationStorageUsage } from '@/api/storage'
 import ComboLogo from '@/components/brand/ComboLogo.vue'
+import ErrorReportButton from '@/components/common/ErrorReportButton.vue'
 import { knowledgeApi, type KnowledgeRetrievalSettings } from '@/api/knowledge'
 import { useAgentStore } from '@/stores/agent'
 import { useRuntimeStore } from '@/stores/runtime'
@@ -778,12 +759,6 @@ function formatBytes(value: number): string {
   letter-spacing: -0.01em;
 }
 
-.group-desc {
-  font-size: var(--app-font-sm);
-  color: var(--app-text-muted);
-  line-height: var(--app-leading-normal);
-}
-
 .group-body {
   padding: var(--app-space-lg);
   display: flex;
@@ -845,7 +820,7 @@ function formatBytes(value: number): string {
   font-variant-numeric: tabular-nums;
 }
 
-.field-hint {
+.field-status {
   margin: 0;
   font-size: var(--app-font-sm);
   color: var(--app-text-muted);
@@ -950,6 +925,13 @@ function formatBytes(value: number): string {
   gap: var(--app-space-md);
 }
 
+.footer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--app-space-sm);
+}
+
 .footer-update-status {
   color: var(--app-text-secondary);
   font-size: var(--app-font-sm);
@@ -960,12 +942,6 @@ function formatBytes(value: number): string {
   font-weight: 400;
   color: var(--app-text-muted);
   font-variant-numeric: tabular-nums;
-}
-
-.footer-desc {
-  font-size: var(--app-font-sm);
-  color: var(--app-text-muted);
-  line-height: var(--app-leading-normal);
 }
 
 /* ========== 窄屏 ========== */

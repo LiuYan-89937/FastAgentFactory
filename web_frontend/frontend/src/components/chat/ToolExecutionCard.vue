@@ -16,12 +16,23 @@
       </span>
       <span class="tool-side">
         <span v-if="durationLabel" class="tool-duration">{{ durationLabel }}</span>
-        <span class="tool-status">{{ statusLabel }}</span>
+        <span v-if="showStatusLabel" class="tool-status">{{ statusLabel }}</span>
         <span class="summary-chevron" aria-hidden="true">⌄</span>
       </span>
     </summary>
 
     <div class="tool-body">
+      <div v-if="state === 'failed'" class="tool-error-actions">
+        <ErrorReportButton
+          :summary="errorSummary"
+          :error-code="errorMetadata.code"
+          :request-id="errorMetadata.requestId"
+          :diagnostic-ref="errorMetadata.diagnosticRef"
+          :context="{ tool_name: part.toolName, call_id: part.callId || '' }"
+          size="tiny"
+          type="error"
+        />
+      </div>
       <div v-if="resultFacts.length" class="tool-facts">
         <span v-for="fact in resultFacts" :key="fact">{{ fact }}</span>
       </div>
@@ -120,6 +131,7 @@
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import ResourceIcon from '@/components/common/ResourceIcon.vue'
 import ToolIcon from '@/components/common/ToolIcon.vue'
+import ErrorReportButton from '@/components/common/ErrorReportButton.vue'
 import { useI18n } from '@/composables/useI18n'
 import { useWorkspaceResourceUrls } from '@/composables/useWorkspaceResourceUrls'
 import { isImageResource, workspaceResourceUrl } from '@/utils/workspaceResources'
@@ -168,10 +180,28 @@ const statusLabel = computed(() => {
   if (resultRecord.value?.status === 'committed') return t('tool.transaction.committed')
   return t('tool.status.completed')
 })
+const showStatusLabel = computed(() => (
+  state.value !== 'completed'
+  || ['preview_ready', 'committed'].includes(String(resultRecord.value?.status || ''))
+))
 const formattedArguments = computed(() => valueString(props.part.arguments))
 const formattedOutput = computed(() => valueString(props.part.error || props.part.output))
 const hasArguments = computed(() => hasValue(props.part.arguments))
 const hasOutput = computed(() => hasValue(props.part.output))
+const errorRecord = computed<Record<string, any>>(() => (
+  props.part.error && typeof props.part.error === 'object' && !Array.isArray(props.part.error)
+    ? props.part.error as Record<string, any>
+    : {}
+))
+const errorMetadata = computed(() => ({
+  code: String(errorRecord.value.code || ''),
+  requestId: String(errorRecord.value.request_id || ''),
+  diagnosticRef: String(errorRecord.value.diagnostic_ref || ''),
+}))
+const errorSummary = computed(() => {
+  const message = errorRecord.value.message || errorRecord.value.detail || props.part.error
+  return `${displayName.value}: ${valueString(message) || t('tool.status.failed')}`
+})
 const clockMs = ref(Date.now())
 const timingActive = computed(() => (
   state.value === 'running'
@@ -366,7 +396,7 @@ function valueString(value: unknown): string {
   align-items: center;
   justify-content: space-between;
   gap: var(--app-space-md);
-  padding: 10px var(--app-space-md);
+  padding: 7px 10px;
   cursor: pointer;
   user-select: none;
 }
@@ -379,7 +409,7 @@ function valueString(value: unknown): string {
 }
 
 .tool-main {
-  gap: 12px;
+  gap: 8px;
 }
 
 .tool-side {
@@ -389,9 +419,9 @@ function valueString(value: unknown): string {
 
 .tool-icon-shell {
   display: grid;
-  width: 30px;
-  height: 30px;
-  flex: 0 0 30px;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 26px;
   place-items: center;
   background: transparent;
   color: var(--app-text);
@@ -409,17 +439,17 @@ function valueString(value: unknown): string {
 
 .tool-icon-shell :deep(.n-icon) {
   display: flex;
-  width: 20px;
-  height: 20px;
-  flex: 0 0 20px;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
   align-items: center;
   justify-content: center;
 }
 
 .tool-icon-shell :deep(svg) {
   display: block;
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
 }
 
 .tool-copy {
@@ -467,6 +497,12 @@ details[open] > summary .summary-chevron {
 .tool-body {
   border-top: 1px solid var(--app-border);
   background: var(--app-surface);
+}
+
+.tool-error-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding: 6px var(--app-space-md) 0;
 }
 
 .tool-facts,

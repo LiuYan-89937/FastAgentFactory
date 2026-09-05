@@ -1,26 +1,25 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
-import { RouterView } from 'vue-router'
+import { computed, onMounted } from 'vue'
+import { RouterView, useRoute } from 'vue-router'
 import SiteHeader from '@/components/layout/SiteHeader.vue'
 import SiteFooter from '@/components/layout/SiteFooter.vue'
 import { useI18n } from '@/i18n'
-import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 
 const { t } = useI18n()
-const auth = useAuthStore()
 const config = useConfigStore()
+const route = useRoute()
+const standalone = computed(() => route.meta.standalone === true)
 
-// Resolve session + public config once at boot; both fail soft.
+// Public configuration is shared by all website pages and fails soft.
 onMounted(() => {
   void config.ensure()
-  void auth.ensure()
 })
 </script>
 
 <template>
   <a href="#main" class="skip-link">{{ t('nav.menu') }}</a>
-  <SiteHeader />
+  <SiteHeader v-if="!standalone" />
   <main id="main" class="app-main">
     <RouterView v-slot="{ Component }">
       <Transition name="route" mode="out-in">
@@ -28,7 +27,7 @@ onMounted(() => {
       </Transition>
     </RouterView>
   </main>
-  <SiteFooter />
+  <SiteFooter v-if="!standalone" />
 </template>
 
 <style scoped>

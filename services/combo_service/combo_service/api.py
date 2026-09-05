@@ -3,7 +3,7 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 import logging
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 from uuid import uuid4
 
 from fastapi import Cookie, Depends, FastAPI, Header, Query, Request
@@ -23,6 +23,7 @@ from combo_service.auth import (
 )
 from combo_service.config import ConfigurationError, Settings, get_settings
 from combo_service.database import Database
+from combo_service.error_reports import ErrorReportError, ErrorReportRegistry
 from combo_service.oss_store import ObjectStore
 
 
@@ -58,6 +59,23 @@ class AppReleaseAssetCreateRequest(BaseModel):
     updater_signature: str = Field(default="", max_length=20_000)
 
 
+class ErrorReportCreateRequest(BaseModel):
+    source: Literal["desktop"] = "desktop"
+    app_version: str = Field(min_length=1, max_length=100)
+    platform: str = Field(min_length=1, max_length=40)
+    architecture: str = Field(min_length=1, max_length=40)
+    error_code: str = Field(default="", max_length=200)
+    summary: str = Field(min_length=1, max_length=4_000)
+    request_id: str = Field(default="", max_length=200)
+    diagnostic_ref: str = Field(default="", max_length=500)
+    context: dict[str, Any] = Field(default_factory=dict)
+    log_excerpt: str = Field(default="", max_length=64_000)
+
+
+class ErrorReportStatusRequest(BaseModel):
+    status: Literal["new", "reviewed", "resolved"]
+
+
 class ApplicationServices:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
@@ -69,6 +87,7 @@ class ApplicationServices:
             self.database,
             self.object_store,
         )
+        self.error_reports = ErrorReportRegistry(self.database)
 
 
 @asynccontextmanager
@@ -160,6 +179,12 @@ async def app_release_error(_: Request, exc: AppReleaseError) -> JSONResponse:
     return _error_response(status, exc.code, str(exc))
 
 
+@app.exception_handler(ErrorReportError)
+async def error_report_error(_: Request, exc: ErrorReportError) -> JSONResponse:
+    status = 404 if exc.code.endswith("_not_found") else 422
+    return _error_response(status, exc.code, str(exc))
+
+
 def services(request: Request) -> ApplicationServices:
     return request.app.state.services
 
@@ -180,6 +205,11 @@ def admin_user(user: Annotated[dict[str, Any], Depends(current_user)]) -> dict[s
     if not bool(user.get("is_admin")):
         raise AuthenticationError("administrator access required")
     return user
+
+
+@app.get("/api/v1/admin/access")
+def admin_access(_: Annotated[dict[str, Any], Depends(admin_user)]) -> dict[str, bool]:
+    return {"authorized": True}
 
 
 @app.get("/health")
@@ -367,6 +397,63 @@ def app_update_manifest(
 @app.get("/api/v1/config/public")
 def public_config(request: Request) -> dict[str, Any]:
     return services(request).app_releases.public_config()
+
+
+@app.post("/api/v1/error-reports", status_code=201)
+def create_error_report(
+    request: Request,
+    payload: ErrorReportCreateRequest,
+) -> dict[str, Any]:
+    report = services(request).error_reports.create(
+        source=payload.source,
+        app_version=payload.app_version.strip(),
+        platform=payload.platform.strip(),
+        architecture=payload.architecture.strip(),
+        error_code=payload.error_code.strip(),
+        summary=payload.summary.strip(),
+        request_id=payload.request_id.strip(),
+        diagnostic_ref=payload.diagnostic_ref.strip(),
+        context=payload.context,
+        log_excerpt=payload.log_excerpt,
+    )
+    return {
+        "error_report_id": report["error_report_id"],
+        "status": report["status"],
+        "created_at": report["created_at"],
+    }
+
+
+@app.get("/api/v1/admin/error-reports")
+def admin_list_error_reports(
+    request: Request,
+    _: Annotated[dict[str, Any], Depends(admin_user)],
+    status: str = Query(default="", max_length=20),
+    limit: int = Query(default=100, ge=1, le=200),
+) -> list[dict[str, Any]]:
+    return services(request).error_reports.list(status=status, limit=limit)
+
+
+@app.get("/api/v1/admin/error-reports/{error_report_id}")
+def admin_error_report_detail(
+    request: Request,
+    error_report_id: str,
+    _: Annotated[dict[str, Any], Depends(admin_user)],
+) -> dict[str, Any]:
+    return services(request).error_reports.get(error_report_id)
+
+
+@app.patch("/api/v1/admin/error-reports/{error_report_id}")
+def admin_update_error_report(
+    request: Request,
+    error_report_id: str,
+    payload: ErrorReportStatusRequest,
+    admin: Annotated[dict[str, Any], Depends(admin_user)],
+) -> dict[str, Any]:
+    return services(request).error_reports.update_status(
+        error_report_id,
+        status=payload.status,
+        admin=admin,
+    )
 
 
 @app.get("/api/v1/admin/app-releases")

@@ -47,9 +47,16 @@
                 <n-text v-if="startupStore.error" type="error" class="startup-error">
                   {{ startupStore.error }}
                 </n-text>
-                <n-button type="primary" @click="startupStore.retry">
-                  {{ t('startup.retry') }}
-                </n-button>
+                <div class="startup-actions">
+                  <ErrorReportButton
+                    :summary="startupStore.error || t('startup.failed')"
+                    error-code="startup_failed"
+                    :context="{ phase: 'startup' }"
+                  />
+                  <n-button type="primary" @click="startupStore.retry">
+                    {{ t('startup.retry') }}
+                  </n-button>
+                </div>
               </div>
             </n-modal>
           </n-loading-bar-provider>
@@ -74,6 +81,7 @@ import { createThemeOverrides } from '@/theme/naiveTheme'
 import AppContent from '@/layouts/AppContent.vue'
 import SelectionReferenceMenu from '@/components/chat/SelectionReferenceMenu.vue'
 import AppUpdateDialog from '@/components/common/AppUpdateDialog.vue'
+import ErrorReportButton from '@/components/common/ErrorReportButton.vue'
 import ComboFrameAnimation from '@/components/brand/ComboFrameAnimation.vue'
 
 const route = useRoute()
@@ -126,6 +134,11 @@ watchEffect(() => {
 .startup-error {
   max-width: 100%;
   overflow-wrap: anywhere;
+}
+
+.startup-actions {
+  display: flex;
+  gap: 8px;
 }
 </style>
 

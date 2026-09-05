@@ -1,5 +1,5 @@
 <template>
-  <span class="control-hint">
+  <span class="control-hint" :class="`placement-${placement}`">
     <slot />
     <span v-if="!disabled" class="control-hint-content" role="tooltip">{{ label }}</span>
   </span>
@@ -9,8 +9,10 @@
 withDefaults(defineProps<{
   label: string
   disabled?: boolean
+  placement?: 'top' | 'bottom'
 }>(), {
   disabled: false,
+  placement: 'top',
 })
 </script>
 
@@ -53,6 +55,23 @@ withDefaults(defineProps<{
   background: var(--app-text);
   content: '';
   transform: translate(-50%, -4px) rotate(45deg);
+}
+
+.placement-bottom .control-hint-content {
+  top: calc(100% + 10px);
+  bottom: auto;
+  transform: translate(-50%, -5px);
+}
+
+.placement-bottom .control-hint-content::after {
+  top: auto;
+  bottom: 100%;
+  transform: translate(-50%, 4px) rotate(45deg);
+}
+
+.placement-bottom:hover .control-hint-content,
+.placement-bottom:has(:focus-visible) .control-hint-content {
+  transform: translate(-50%, 0);
 }
 
 .control-hint:hover .control-hint-content,

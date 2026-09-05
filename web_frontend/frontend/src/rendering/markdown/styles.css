@@ -146,14 +146,20 @@
   position: relative;
   width: 100%;
   max-width: 100%;
-  overflow: auto;
-  overscroll-behavior: contain;
-  scrollbar-gutter: stable;
+  overflow: hidden;
   margin: 14px 0;
   padding: 12px;
   background: var(--app-surface-muted);
   border: 1px solid var(--app-border);
   border-radius: var(--app-radius-md);
+}
+
+.markdown-content .mermaid[data-mermaid-interactive='true'] {
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  outline: 1px solid var(--app-border-hover);
+  outline-offset: -1px;
 }
 
 .markdown-content .mermaid[data-mermaid-aspect='wide'] {

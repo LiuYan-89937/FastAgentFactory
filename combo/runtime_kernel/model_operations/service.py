@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from contextvars import copy_context
 from dataclasses import dataclass
+from pathlib import Path
 from queue import Empty, Queue
 from threading import RLock
 from threading import Thread
@@ -134,6 +136,8 @@ class ModelInvocationOperations:
     not decide graph routes, plan tools, approve tools, or execute tools.
     """
 
+    _workspace_path_resolver: Callable[[str], Path]
+
     def text(
         self,
         *,
@@ -175,6 +179,7 @@ class ModelInvocationOperations:
             system_prompt=self._system_prompt(state=state),
             messages=messages or [],
             tools=tool_list,
+            workspace_path_resolver=self._workspace_path_resolver,
             node_id=node_id,
             image_input_enabled=image_input_enabled,
         )
@@ -311,6 +316,7 @@ class ModelInvocationOperations:
                 system_prompt=self._system_prompt(state=state),
                 messages=messages or [],
                 tools=[],
+                workspace_path_resolver=self._workspace_path_resolver,
                 node_id=node_id,
                 image_input_enabled=bool(metadata.get("multimodal")),
             )
@@ -439,8 +445,14 @@ class ModelOperationService(ModelInvocationOperations):
     model_role = "runtime"
     authoritative_runtime_model = True
 
-    def __init__(self, registry: RuntimeModelHandleRegistry) -> None:
+    def __init__(
+        self,
+        registry: RuntimeModelHandleRegistry,
+        *,
+        workspace_path_resolver: Callable[[str], Path],
+    ) -> None:
         self._registry = registry
+        self._workspace_path_resolver = workspace_path_resolver
 
     @staticmethod
     def _system_prompt(*, state: Any) -> str:

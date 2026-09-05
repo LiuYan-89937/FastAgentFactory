@@ -3,7 +3,6 @@
     <div class="context-bar">
       <div class="context-title">
         <n-text strong>{{ t('modelPool.title') }}</n-text>
-        <n-text depth="3" class="context-subtitle">{{ t('modelPool.subtitle') }}</n-text>
       </div>
       <n-button @click="refresh" :loading="loading">
         <template #icon>
@@ -17,7 +16,6 @@
       <n-tab-pane name="profiles" :tab="t('modelPool.profiles')">
         <div class="tab-content">
           <div class="content-header">
-            <n-text>{{ t('modelPool.profileHint') }}</n-text>
             <n-button type="primary" @click="openProfile()">
               <template #icon>
                 <n-icon><Add /></n-icon>
@@ -116,7 +114,6 @@
       <n-tab-pane name="credentials" :tab="t('modelPool.credentials')">
         <div class="tab-content">
           <div class="content-header">
-            <n-text>{{ t('modelPool.credentialHint') }}</n-text>
             <n-button type="primary" @click="openCredential()">
               <template #icon>
                 <n-icon><Add /></n-icon>
@@ -252,7 +249,6 @@
             <span>01</span>
             <div>
               <strong>{{ t('modelPool.identitySection') }}</strong>
-              <small>{{ t('modelPool.identitySectionHint') }}</small>
             </div>
           </header>
           <n-form-item :label="t('modelPool.displayName')" path="display_name">
@@ -272,7 +268,6 @@
             <span>02</span>
             <div>
               <strong>{{ t('modelPool.connectionSection') }}</strong>
-              <small>{{ t('modelPool.connectionSectionHint') }}</small>
             </div>
           </header>
           <n-form-item :label="t('modelPool.baseUrl')" path="base_url">
@@ -313,7 +308,6 @@
             <span>01</span>
             <div>
               <strong>{{ t('modelPool.identitySection') }}</strong>
-              <small>{{ t('modelPool.identitySectionHint') }}</small>
             </div>
           </header>
           <n-form-item :label="t('modelPool.displayName')" path="display_name">
@@ -344,7 +338,6 @@
             <span>02</span>
             <div>
               <strong>{{ t('modelPool.runtimeSection') }}</strong>
-              <small>{{ t('modelPool.runtimeSectionHint') }}</small>
             </div>
           </header>
           <n-form-item v-if="profileForm.kind === 'chat'" :label="t('modelPool.capabilities')" class="model-capability-field">
@@ -352,8 +345,6 @@
               <n-checkbox v-model:checked="profileForm.tool_calling">{{ t('modelPool.toolCalling') }}</n-checkbox>
               <n-checkbox v-model:checked="profileForm.image_input">{{ t('modelPool.imageInput') }}</n-checkbox>
               <n-checkbox v-model:checked="profileForm.image_output">{{ t('modelPool.imageOutput') }}</n-checkbox>
-              <n-checkbox v-model:checked="profileForm.audio_input">{{ t('modelPool.audioInput') }}</n-checkbox>
-              <n-checkbox v-model:checked="profileForm.audio_output">{{ t('modelPool.audioOutput') }}</n-checkbox>
               <n-checkbox v-model:checked="profileForm.reasoning_supported">{{ t('modelPool.reasoning') }}</n-checkbox>
             </n-space>
           </n-form-item>
@@ -364,7 +355,6 @@
               <n-checkbox v-model:checked="profileForm.image_edit" :disabled="!providerImageCapability('image_edit')">{{ t('modelPool.imageEdit') }}</n-checkbox>
               <n-checkbox v-model:checked="profileForm.multi_image_reference" :disabled="!providerImageCapability('multi_image_reference')">{{ t('modelPool.multiImageReference') }}</n-checkbox>
               <n-checkbox v-model:checked="profileForm.batch_generation" :disabled="!providerImageCapability('batch_generation')">{{ t('modelPool.batchGeneration') }}</n-checkbox>
-              <n-text depth="3">{{ t('modelPool.imageCapabilitiesDeclarationHint') }}</n-text>
             </n-space>
           </n-form-item>
           <div v-if="profileForm.kind === 'chat'" class="form-grid">
@@ -522,7 +512,12 @@ const uiStore = useUiStore()
 const chartPalette = computed(() => getPalette(uiStore.actualTheme === 'dark'))
 
 const loading = ref(false)
-const activeTab = ref('profiles')
+const modelPoolTabs = new Set(['profiles', 'credentials', 'usage'])
+const requestedTab = () => {
+  const value = Array.isArray(route.query.tab) ? route.query.tab[0] : route.query.tab
+  return typeof value === 'string' && modelPoolTabs.has(value) ? value : 'profiles'
+}
+const activeTab = ref(requestedTab())
 const infrastructureBindingsPanel = ref<HTMLElement | null>(null)
 const embeddingSetupRequested = computed(() => route.query.setup === 'embedding')
 const saving = ref(false)
@@ -569,8 +564,6 @@ const profileForm = reactive({
   reasoning_supported: false,
   image_input: false,
   image_output: false,
-  audio_input: false,
-  audio_output: false,
   text_to_image: true,
   image_to_image: false,
   image_edit: false,
@@ -714,6 +707,11 @@ onMounted(async () => {
 watch(
   () => route.query.setup,
   () => { void focusRequestedSetup() },
+)
+
+watch(
+  () => route.query.tab,
+  () => { activeTab.value = requestedTab() },
 )
 
 async function focusRequestedSetup(): Promise<void> {
@@ -892,8 +890,6 @@ function openProfile(item?: ModelPoolProfile): void {
   profileForm.reasoning_supported = item?.capabilities.reasoning_supported ?? false
   profileForm.image_input = item?.capabilities.input_modalities.includes('image') ?? false
   profileForm.image_output = item?.capabilities.output_modalities.includes('image') ?? false
-  profileForm.audio_input = item?.capabilities.input_modalities.includes('audio') ?? false
-  profileForm.audio_output = item?.capabilities.output_modalities.includes('audio') ?? false
   profileForm.text_to_image = item?.capabilities.text_to_image ?? true
   profileForm.image_to_image = item?.capabilities.image_to_image ?? false
   profileForm.image_edit = item?.capabilities.image_edit ?? false
@@ -934,8 +930,6 @@ async function saveProfile(): Promise<void> {
     const outputModalities = isImageModel ? ['image'] : ['text']
     if (!isImageModel && !isEmbeddingModel && profileForm.image_input) inputModalities.push('image')
     if (!isImageModel && !isEmbeddingModel && profileForm.image_output) outputModalities.push('image')
-    if (!isImageModel && !isEmbeddingModel && profileForm.audio_input) inputModalities.push('audio')
-    if (!isImageModel && !isEmbeddingModel && profileForm.audio_output) outputModalities.push('audio')
     if (isImageModel && (profileForm.image_to_image || profileForm.image_edit)) inputModalities.push('image')
     const payload = {
       display_name: profileForm.display_name,
@@ -1159,8 +1153,6 @@ function capabilityTags(profile: ModelPoolProfile): string[] {
   if (profile.capabilities.tool_calling) tags.push(t('modelPool.toolsTag'))
   if (profile.capabilities.input_modalities.includes('image')) tags.push(t('modelPool.imageInput'))
   if (profile.capabilities.output_modalities.includes('image')) tags.push(t('modelPool.imageOutput'))
-  if (profile.capabilities.input_modalities.includes('audio')) tags.push(t('modelPool.audioInput'))
-  if (profile.capabilities.output_modalities.includes('audio')) tags.push(t('modelPool.audioOutput'))
   if (profile.capabilities.reasoning_supported) tags.push(t('modelPool.reasoning'))
   return tags
 }
@@ -1211,7 +1203,6 @@ function formatCost(value: number | null | undefined): string {
   gap: 2px;
 }
 
-.context-subtitle,
 .item-meta {
   font-size: 12px;
 }
@@ -1227,6 +1218,10 @@ function formatCost(value: number | null | undefined): string {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+}
+
+.content-header > .n-button {
+  margin-left: auto;
 }
 
 .model-list {

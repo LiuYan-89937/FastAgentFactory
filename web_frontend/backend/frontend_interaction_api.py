@@ -30,6 +30,7 @@ from combo.runtime_protocol import (
 from combo.runtime_i18n import normalize_runtime_locale
 from combo.runtime_protocol.chat_parts import build_chat_turn_messages
 from combo.workspace_directories import WorkspaceDirectoryBrowser
+from combo.tooling.workspace_paths import resolve_workspace_path
 from web_frontend.backend.frontend_event_bridge import project_runtime_event
 from web_frontend.backend.attachment_upload_store import (
     AttachmentUploadError,
@@ -2455,10 +2456,10 @@ def _memory_workspace_id(
 
 
 def _workspace_path(root: Path, relative_path: str) -> Path:
-    candidate = (root / str(relative_path or "")).resolve()
-    if candidate != root and root not in candidate.parents:
-        raise HTTPException(status_code=403, detail="workspace path escapes the active workspace")
-    return candidate
+    try:
+        return resolve_workspace_path(relative_path, root=root)
+    except ValueError as exc:
+        raise HTTPException(status_code=403, detail="workspace path escapes the active workspace") from exc
 
 
 def _workspace_entry(root: Path, target: Path, scope: str) -> dict[str, Any]:

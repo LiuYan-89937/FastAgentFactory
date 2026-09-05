@@ -2,18 +2,20 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod desktop_file_actions;
+mod error_reporting;
 mod git_repository;
 mod github_account;
 mod python_sidecar;
 mod user_environment;
 
 use desktop_file_actions::{reveal_in_file_manager, save_file_as, select_directory};
+use error_reporting::report_error;
 use git_repository::{
     git_add_remote, git_begin_turn_snapshot, git_clone_repository, git_commit,
     git_fetch_repository, git_initialize_repository, git_pull_repository, git_push_repository,
-    git_reapply_turn, git_repository_diff, git_repository_identity, git_repository_status,
-    git_revert_turn, git_set_repository_identity, git_stage_all, git_stage_paths,
-    git_sync_repository, git_turn_changes, git_unstage_paths,
+    git_reapply_turn, git_repository_branches, git_repository_diff, git_repository_identity,
+    git_repository_status, git_revert_turn, git_set_repository_identity, git_stage_all,
+    git_stage_paths, git_switch_branch, git_sync_repository, git_turn_changes, git_unstage_paths,
 };
 use github_account::{
     github_account, github_cancel_browser_authorization, github_create_repository,
@@ -171,10 +173,13 @@ fn main() {
             restart_backend,
             shutdown_backend,
             desktop_platform,
+            report_error,
             reveal_in_file_manager,
             save_file_as,
             select_directory,
             git_repository_status,
+            git_repository_branches,
+            git_switch_branch,
             git_initialize_repository,
             git_add_remote,
             git_repository_identity,

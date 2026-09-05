@@ -7,6 +7,7 @@ from uuid import uuid4
 from pydantic import BaseModel, ConfigDict, Field
 
 from combo.runtime_kernel.constants import RUNTIME_KERNEL_VERSION, RUNTIME_STATE_SCHEMA_VERSION
+from combo.runtime_defaults import DEFAULT_BUILTIN_WORKSPACE_ROOT
 
 
 class RunState(BaseModel):
@@ -167,7 +168,7 @@ class RuntimeConfigState(BaseModel):
     capability_instructions: str = ""
     turn_directives: list[str] = Field(default_factory=list)
     attachments: list[dict[str, Any]] = Field(default_factory=list)
-    workspace_root_alias: str = "/workdir"
+    workspace_root_alias: str = DEFAULT_BUILTIN_WORKSPACE_ROOT
     allow_external_paths: bool = False
     workspace_mounts: list[dict[str, Any]] = Field(default_factory=list)
 

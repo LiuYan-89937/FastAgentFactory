@@ -1,4 +1,5 @@
 import type { ApiErrorBody } from './types'
+import { getAdminAccessToken } from './adminAccess'
 
 /**
  * Central HTTP client. All API URLs are built from a single base so business
@@ -52,6 +53,10 @@ function buildUrl(path: string, query?: RequestOptions['query']): string {
   return qs ? `${url}?${qs}` : url
 }
 
+function isAdminRequest(path: string): boolean {
+  return path === '/admin' || path.startsWith('/admin/') || path.startsWith('/api/v1/admin/')
+}
+
 async function parseError(response: Response): Promise<ApiError> {
   let body: ApiErrorBody = { code: 'unknown_error', message: response.statusText }
   try {
@@ -101,6 +106,8 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   }
 
   const headers: Record<string, string> = { Accept: 'application/json' }
+  const adminToken = isAdminRequest(path) ? getAdminAccessToken() : ''
+  if (adminToken) headers.Authorization = `Bearer ${adminToken}`
   let payload: BodyInit | undefined
   if (body !== undefined) {
     headers['Content-Type'] = 'application/json'

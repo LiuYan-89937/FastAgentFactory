@@ -404,7 +404,7 @@ onBeforeUnmount(() => {
   animation: dock-panel-enter .24s cubic-bezier(.16, 1, .3, 1) both;
 }
 .session-panel-shell { width: min(440px, calc(100vw - 44px)); max-height: min(72vh, 660px); overflow: auto; }
-.workspace-panel-shell { width: min(500px, calc(100vw - 44px)); height: min(74vh, 700px); overflow: auto; }
+.workspace-panel-shell { width: min(500px, calc(100vw - 44px)); height: min(84vh, 820px); max-height: calc(100vh - 32px); overflow: hidden; }
 @keyframes dock-panel-enter { from { opacity: 0; transform: translateY(7px) scale(.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @media (prefers-reduced-motion: reduce) { .dock-panel { animation: none; } }
 </style>

@@ -24,6 +24,10 @@ export function listAdminAppReleases(
   })
 }
 
+export function verifyAdminAccess(signal?: AbortSignal): Promise<{ authorized: true }> {
+  return request<{ authorized: true }>('/admin/access', { signal })
+}
+
 export function fetchAdminAppRelease(
   releaseId: string,
   signal?: AbortSignal,

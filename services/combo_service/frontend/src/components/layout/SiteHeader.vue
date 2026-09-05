@@ -10,13 +10,10 @@ import BaseIcon from '@/components/base/BaseIcon.vue'
 import ThemeToggle from './ThemeToggle.vue'
 import LangToggle from './LangToggle.vue'
 import { useI18n } from '@/i18n'
-import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 
 const { t } = useI18n()
 const route = useRoute()
-const auth = useAuthStore()
-const { user, isAuthenticated, isAdmin } = storeToRefs(auth)
 const configStore = useConfigStore()
 const { config } = storeToRefs(configStore)
 
@@ -70,22 +67,7 @@ watch(
       <div class="header__actions">
         <LangToggle />
         <ThemeToggle />
-        <RouterLink v-if="isAdmin" to="/admin" class="header__publish">{{ t('nav.admin') }}</RouterLink>
-        <template v-if="isAuthenticated && user">
-          <RouterLink to="/admin" class="header__user" :title="user.display_name || user.github_login">
-            <img
-              v-if="user.avatar_url"
-              :src="user.avatar_url"
-              :alt="''"
-              class="header__avatar"
-              width="28"
-              height="28"
-              aria-hidden="true"
-            />
-            <span class="header__user-name">{{ user.display_name || user.github_login }}</span>
-          </RouterLink>
-        </template>
-        <a v-else href="/#download" class="header__login"><BaseIcon name="download" :size="16" />{{ t('nav.download') }}</a>
+        <a href="/#download" class="header__login"><BaseIcon name="download" :size="16" />{{ t('nav.download') }}</a>
       </div>
 
       <button
@@ -110,7 +92,6 @@ watch(
           >
             {{ link.label }}
           </RouterLink>
-          <RouterLink v-if="isAdmin" to="/admin" class="sheet__link">{{ t('nav.admin') }}</RouterLink>
           <a class="sheet__link" :href="config.githubRepoUrl" target="_blank" rel="noopener noreferrer">
             {{ t('nav.github') }}
             <BaseIcon name="arrow-up-right" :size="15" />
@@ -118,8 +99,7 @@ watch(
           <div class="sheet__row">
             <LangToggle />
             <ThemeToggle />
-            <a v-if="!isAuthenticated" href="/#download" class="header__login"><BaseIcon name="download" :size="16" />{{ t('nav.download') }}</a>
-            <span v-else class="sheet__user">{{ user?.display_name || user?.github_login }}</span>
+            <a href="/#download" class="header__login"><BaseIcon name="download" :size="16" />{{ t('nav.download') }}</a>
           </div>
         </div>
       </div>
@@ -221,18 +201,6 @@ watch(
   align-items: center;
   gap: var(--space-1);
 }
-.header__publish {
-  padding: 8px var(--space-3);
-  color: var(--text-secondary);
-  text-decoration: none;
-  font-size: 15px;
-  font-weight: 500;
-  border-radius: var(--radius-sm);
-}
-.header__publish:hover {
-  color: var(--text-strong);
-  background: var(--surface-subtle);
-}
 .header__login {
   display: inline-flex;
   align-items: center;
@@ -252,33 +220,6 @@ watch(
 .header__login:hover {
   background: var(--primary-hover);
 }
-.header__user {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  height: 40px;
-  padding: 4px 12px 4px 5px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-pill);
-  color: var(--text-strong);
-  text-decoration: none;
-  font-size: 14px;
-  font-weight: 550;
-  max-width: 180px;
-}
-.header__user:hover {
-  background: var(--surface-subtle);
-}
-.header__avatar {
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-.header__user-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .header__burger {
   display: none;
   align-items: center;
@@ -326,12 +267,6 @@ watch(
   padding-top: var(--space-3);
   border-top: 1px solid var(--border);
 }
-.sheet__user {
-  font-size: 14px;
-  color: var(--text-secondary);
-  font-weight: 550;
-}
-
 .sheet-enter-active,
 .sheet-leave-active {
   transition: opacity var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out);
@@ -344,7 +279,6 @@ watch(
 
 @media (max-width: 1023px) {
   .nav,
-  .header__publish,
   .header__actions {
     display: none;
   }

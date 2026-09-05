@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -43,6 +44,7 @@ class DynamicRuntimeServicesFactory:
         graph_store: Any,
         context_system: Any,
         context_engine: Any,
+        workspace_root_resolver: Callable[[str, str], str],
         artifact_store: Any | None = None,
         scheduler_store: Any | None = None,
         scheduler_runtime: Any | None = None,
@@ -55,6 +57,7 @@ class DynamicRuntimeServicesFactory:
         self._graph_store = _required_dependency(graph_store, "graph_store")
         self._context_system = _required_dependency(context_system, "context_system")
         self._context_engine = _required_dependency(context_engine, "context_engine")
+        self._workspace_root_resolver = workspace_root_resolver
         self._artifact_store = artifact_store
         self._scheduler_store = scheduler_store
         self._scheduler_runtime = scheduler_runtime
@@ -62,9 +65,12 @@ class DynamicRuntimeServicesFactory:
     def build(self) -> DynamicRuntimeServiceSet:
         model_handles = RuntimeModelHandleRegistry()
         scoped_tool_registry = RuntimeScopedToolRegistry()
-        scoped_context_resources = RuntimeScopedContextResources()
+        scoped_context_resources = RuntimeScopedContextResources(self._workspace_root_resolver)
         services = RuntimeServices(
-            model_operation_service=ModelOperationService(model_handles),
+            model_operation_service=ModelOperationService(
+                model_handles,
+                workspace_path_resolver=scoped_context_resources.resolve_workspace_path,
+            ),
             tool_registry=scoped_tool_registry,
             graph_store=self._graph_store,
             context_system=self._context_system,

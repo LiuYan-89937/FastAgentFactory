@@ -789,34 +789,29 @@ export const useRuntimeStore = defineStore('runtime', {
       this.pendingInterrupt = null
       this._syncAgentSessionFromRunEvent(event)
 
-      // 展示错误
-      const errorMsg =
-        event.payload?.message ||
-        event.payload?.error ||
-        event.payload?.error_message ||
-        event.message ||
-        'Run failed'
+      const failure = runtimeFailurePresentation(event, translate(currentLocale(), 'common.requestFailed'))
 
       const errorItem: TranscriptItem = {
         id: event.event_id,
         role: 'system',
-        content: errorMsg,
+        content: failure.message,
         timestamp: event.timestamp,
         status: 'failed',
         parts: [
-          errorPart(`${event.event_id}:error`, errorMsg, event.payload || {}, event.timestamp),
+          errorPart(`${event.event_id}:error`, failure.message, failure.envelope, event.timestamp),
         ],
         metadata: {
-          where: event.payload?.where,
-          why: event.payload?.why,
-          error_type: event.payload?.error_type,
+          runtime_error: true,
+          error_code: failure.envelope.code,
+          request_id: failure.envelope.request_id,
+          runtime_instance_id: failure.envelope.runtime_instance_id,
         },
       }
       this.transcript.push(errorItem)
       const turn = ensureConversationTurn(this, requestId, event.timestamp)
       turn.status = 'failed'
       turn.completedAt = event.timestamp
-      turn.errorMessage = errorMsg
+      turn.errorMessage = failure.message
       if (!this.activeRequestId || this.activeRequestId === requestId) {
         this.activeRequestId = null
       }
@@ -1050,26 +1045,27 @@ export const useRuntimeStore = defineStore('runtime', {
       } else if (event.request_id) {
         const turn = this.conversationTurns.find((item) => item.requestId === event.request_id)
         if (turn) {
-          const errorMessage = event.message || event.payload?.message || translate(currentLocale(), 'common.requestFailed')
+          const failure = runtimeFailurePresentation(event, translate(currentLocale(), 'common.requestFailed'))
           const errorItem: TranscriptItem = {
             id: event.event_id,
             role: 'system',
-            content: errorMessage,
+            content: failure.message,
             timestamp: event.timestamp,
             status: 'failed',
             parts: [
-              errorPart(`${event.event_id}:error`, errorMessage, event.payload || {}, event.timestamp),
+              errorPart(`${event.event_id}:error`, failure.message, failure.envelope, event.timestamp),
             ],
             metadata: {
-              where: event.payload?.where,
-              why: event.payload?.why,
-              error_type: event.payload?.error_type,
+              runtime_error: true,
+              error_code: failure.envelope.code,
+              request_id: failure.envelope.request_id,
+              runtime_instance_id: failure.envelope.runtime_instance_id,
             },
           }
           this.transcript.push(errorItem)
           turn.status = 'failed'
           turn.completedAt = event.timestamp
-          turn.errorMessage = errorMessage
+          turn.errorMessage = failure.message
         } else {
           console.error('Runtime error:', event.message, event.payload)
         }
@@ -1818,6 +1814,65 @@ function currentLocale() {
   if (typeof window === 'undefined') return detectBrowserLocale()
   const stored = window.localStorage.getItem(localeStorageKey)
   return stored ? normalizeLocale(stored) : detectBrowserLocale()
+}
+
+interface RuntimeFailurePresentation {
+  message: string
+  envelope: Record<string, unknown>
+}
+
+function runtimeFailurePresentation(
+  event: RuntimeFrontendEvent,
+  fallbackMessage: string,
+): RuntimeFailurePresentation {
+  const payload = objectRecord(event.payload)
+  const rawError = payload.error
+  const errorEnvelope = objectRecord(rawError)
+  const errorDetails = objectRecord(errorEnvelope.details)
+  const message = firstNonEmptyString(
+    errorDetails.message,
+    errorEnvelope.message,
+    payload.error_message,
+    payload.message,
+    typeof rawError === 'string' ? rawError : null,
+    event.message,
+  ) || fallbackMessage
+  const code = firstNonEmptyString(errorEnvelope.code, payload.error_type)
+  const requestId = firstNonEmptyString(errorEnvelope.request_id, event.request_id)
+  const runtimeInstanceId = firstNonEmptyString(errorEnvelope.runtime_instance_id, event.run_id)
+  const details = Object.keys(errorDetails).length > 0
+    ? errorDetails
+    : {
+        ...(firstNonEmptyString(payload.where) ? { where: firstNonEmptyString(payload.where) } : {}),
+        ...(firstNonEmptyString(payload.why) ? { why: firstNonEmptyString(payload.why) } : {}),
+        message,
+      }
+
+  return {
+    message,
+    envelope: {
+      ...errorEnvelope,
+      ...(code ? { code } : {}),
+      ...(requestId ? { request_id: requestId } : {}),
+      ...(runtimeInstanceId ? { runtime_instance_id: runtimeInstanceId } : {}),
+      details,
+    },
+  }
+}
+
+function objectRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {}
+}
+
+function firstNonEmptyString(...values: unknown[]): string {
+  for (const value of values) {
+    if (typeof value !== 'string') continue
+    const text = value.trim()
+    if (text) return text
+  }
+  return ''
 }
 
 function optionalPositiveInteger(value: unknown): number | null {

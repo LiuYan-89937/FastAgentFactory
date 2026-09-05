@@ -23,14 +23,22 @@
 
     <div class="git-change-files">
       <button
-        v-for="file in changes.files"
+        v-for="file in visibleFiles"
         :key="file.path"
         type="button"
+        :title="file.path"
         @click="openReview(file.path)"
       >
-        <span class="file-state">{{ changeCode(file.change_type) }}</span>
-        <span class="file-path">{{ file.path }}</span>
-        <span class="file-lines"><b>+{{ file.additions }}</b><i>-{{ file.deletions }}</i></span>
+        <span class="file-path">{{ basename(file.path) }}</span>
+      </button>
+      <button
+        v-if="changes.files.length > COLLAPSED_FILE_LIMIT"
+        type="button"
+        class="file-list-toggle"
+        :aria-expanded="filesExpanded"
+        @click="filesExpanded = !filesExpanded"
+      >
+        {{ filesExpanded ? t('git.collapseFiles') : t('git.showAllFiles', { count: changes.files.length }) }}
       </button>
     </div>
   </section>
@@ -62,12 +70,9 @@
             :class="{ active: selectedPath === file.path }"
             @click="selectFile(file.path)"
           >
-            <span class="review-file-state">{{ changeCode(file.change_type) }}</span>
             <span class="review-file-copy">
               <strong>{{ basename(file.path) }}</strong>
-              <small>{{ file.path }}</small>
             </span>
-            <span class="file-lines"><b>+{{ file.additions }}</b><i>-{{ file.deletions }}</i></span>
           </button>
         </aside>
 
@@ -83,7 +88,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { NModal, useDialog, useMessage } from 'naive-ui'
-import { gitApi, type GitChangeType, type GitFileDiff, type GitTurnChanges } from '@/api/git'
+import { gitApi, type GitFileDiff, type GitTurnChanges } from '@/api/git'
 import { useI18n } from '@/composables/useI18n'
 import GitDiffViewer from '@/components/chat/GitDiffViewer.vue'
 
@@ -92,12 +97,17 @@ const { t } = useI18n()
 const dialog = useDialog()
 const message = useMessage()
 const reviewOpen = ref(false)
+const filesExpanded = ref(false)
+const COLLAPSED_FILE_LIMIT = 10
 const selectedPath = ref('')
 const selectedDiff = ref<GitFileDiff | null>(null)
 const diffLoading = ref(false)
 const diffError = ref('')
 const applyingChanges = ref(false)
 const reverted = ref(false)
+const visibleFiles = computed(() => (
+  filesExpanded.value ? props.changes.files : props.changes.files.slice(0, COLLAPSED_FILE_LIMIT)
+))
 const applyActionLabel = computed(() => {
   if (applyingChanges.value) return reverted.value ? t('git.reapplying') : t('git.reverting')
   return reverted.value ? t('git.reapply') : t('git.revert')
@@ -164,9 +174,6 @@ function basename(path: string): string {
   return path.split('/').at(-1) || path
 }
 
-function changeCode(type: GitChangeType): string {
-  return ({ added: 'A', modified: 'M', deleted: 'D', renamed: 'R', copied: 'C', type_changed: 'T', conflicted: '!' })[type] || 'M'
-}
 </script>
 
 <style scoped>
@@ -184,9 +191,10 @@ function changeCode(type: GitChangeType): string {
 .capsule-action.primary { border-color: var(--app-text); background: var(--app-text); color: var(--app-text-inverse); }
 .capsule-action:disabled { cursor: default; opacity: .45; }
 .git-change-files { display: grid; border-top: 1px solid var(--app-border); }
-.git-change-files button { min-width: 0; display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 11px 18px; border: 0; border-bottom: 1px solid var(--app-divider); background: transparent; color: var(--app-text-secondary); text-align: left; cursor: pointer; }
+.git-change-files button { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); align-items: center; gap: 8px; padding: 11px 18px; border: 0; border-bottom: 1px solid var(--app-divider); background: transparent; color: var(--app-text-secondary); text-align: left; cursor: pointer; }
 .git-change-files button:last-child { border-bottom: 0; }.git-change-files button:hover { background: var(--app-surface-hover); }
-.file-state { font: 11px/1 var(--app-font-mono); color: var(--app-text-muted); }.file-path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 12px/1.5 var(--app-font-mono); }
+.file-path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 12px/1.5 var(--app-font-mono); }
+.git-change-files .file-list-toggle { display: flex; align-items: center; justify-content: center; color: var(--app-text-muted); font: 11px/1.4 var(--app-font-sans); text-align: center; }
 .git-change-capsule.reverted { opacity: .7; }
 :global(.git-review-modal) { width: min(1400px, calc(100vw - 40px)); max-width: calc(100vw - 40px); max-height: calc(100vh - 40px); display: flex; flex-direction: column; overflow: hidden; border-radius: 28px; }
 :global(.git-review-modal .n-card-header) { flex: 0 0 auto; }
@@ -196,15 +204,12 @@ function changeCode(type: GitChangeType): string {
 .review-total { flex: 0 0 auto; padding: 9px 13px; border: 1px solid var(--app-border); border-radius: 999px; color: var(--app-text-secondary); }
 .git-review-workspace { height: clamp(360px, 65vh, 680px); max-height: calc(100vh - 190px); min-width: 0; min-height: 0; display: grid; grid-template-columns: minmax(210px, 260px) minmax(0, 1fr); align-items: stretch; gap: 12px; overflow: hidden; }
 .review-file-list { min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 4px; padding: 5px; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; border: 1px solid var(--app-border); border-radius: 18px; background: var(--app-surface-muted); }
-.review-file-list button { min-width: 0; flex: 0 0 auto; display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 10px 9px; border: 0; border-radius: 13px; background: transparent; color: var(--app-text-secondary); text-align: left; cursor: pointer; }
+.review-file-list button { min-width: 0; flex: 0 0 auto; display: grid; grid-template-columns: minmax(0, 1fr); align-items: center; gap: 8px; padding: 10px 9px; border: 0; border-radius: 13px; background: transparent; color: var(--app-text-secondary); text-align: left; cursor: pointer; }
 .review-file-list button:hover { background: var(--app-surface-hover); }
 .review-file-list button.active { background: var(--app-surface); color: var(--app-text-strong); }
-.review-file-state { color: var(--app-text-muted); font: 10px/1 var(--app-font-mono); text-align: center; }
-.review-file-copy { min-width: 0; display: grid; gap: 3px; }
-.review-file-copy strong, .review-file-copy small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.review-file-copy { min-width: 0; display: grid; }
+.review-file-copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .review-file-copy strong { font: 11px/1.35 var(--app-font-mono); }
-.review-file-copy small { color: var(--app-text-muted); font: 9px/1.35 var(--app-font-mono); }
-.review-file-list .file-lines { gap: 4px; font-size: 9px; }
 .git-review-content { min-width: 0; min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); overflow: hidden; border: 1px solid var(--app-border); border-radius: 18px; background: var(--app-surface); }
 .git-review-path { overflow: hidden; padding: 11px 14px; border-bottom: 1px solid var(--app-border); color: var(--app-text-muted); font: 11px/1.4 var(--app-font-mono); text-overflow: ellipsis; white-space: nowrap; }
 .git-review-content :deep(.git-diff-viewer) { border: 0; border-radius: 0; }

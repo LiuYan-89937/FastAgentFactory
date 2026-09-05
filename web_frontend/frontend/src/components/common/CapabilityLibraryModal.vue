@@ -10,34 +10,31 @@
       <div class="library-grid resource-grid">
         <button class="library-entry compact" type="button" @click="openRoute('MainAgentCapabilities')">
           <n-icon size="20"><PersonCircleOutline /></n-icon>
-          <span>
-            <strong>{{ t('settings.mainAgentCapabilities') }}</strong>
-            <small>{{ t('capabilityLibrary.mainAgentCapabilitiesHint') }}</small>
-          </span>
+          <strong>{{ t('settings.mainAgentCapabilities') }}</strong>
         </button>
         <button class="library-entry compact" type="button" @click="openCapabilityPool('mcp')">
           <n-icon size="20"><ExtensionPuzzleOutline /></n-icon>
-          <span><strong>MCP</strong><small>{{ t('capabilityPools.mcpHint') }}</small></span>
+          <strong>MCP</strong>
         </button>
         <button class="library-entry compact" type="button" @click="openCapabilityPool('tools')">
           <n-icon size="20"><ConstructOutline /></n-icon>
-          <span><strong>Tool</strong><small>{{ t('capabilityPools.toolHint') }}</small></span>
+          <strong>Tool</strong>
         </button>
         <button class="library-entry compact" type="button" @click="openCapabilityPool('skills')">
           <n-icon size="20"><SparklesOutline /></n-icon>
-          <span><strong>Skill</strong><small>{{ t('capabilityPools.skillHint') }}</small></span>
+          <strong>Skill</strong>
         </button>
         <button class="library-entry compact" type="button" @click="openRoute('ModelPool')">
           <n-icon size="20"><LayersOutline /></n-icon>
-          <span><strong>模型池</strong><small>模型、凭据与运行时默认绑定。</small></span>
+          <strong>模型池</strong>
         </button>
         <button class="library-entry compact" type="button" @click="openRoute('Knowledge')">
           <n-icon size="20"><LibraryOutline /></n-icon>
-          <span><strong>{{ t('route.knowledge') }}</strong><small>{{ t('capabilityLibrary.knowledgeHint') }}</small></span>
+          <strong>{{ t('route.knowledge') }}</strong>
         </button>
         <button class="library-entry compact" type="button" @click="openRoute('Scheduler')">
           <n-icon size="20"><TimeOutline /></n-icon>
-          <span><strong>{{ t('route.scheduler') }}</strong><small>{{ t('capabilityLibrary.schedulerHint') }}</small></span>
+          <strong>{{ t('route.scheduler') }}</strong>
         </button>
       </div>
     </section>
@@ -109,10 +106,8 @@ function openCapabilityPool(pool: 'mcp' | 'tools' | 'skills') {
 .library-entry > .n-icon { transition: color var(--app-transition-fast), transform var(--app-transition-base); }
 .library-entry:active { transform: translateY(-1px) scale(.99); }
 .library-entry.featured { background: var(--app-text); color: var(--app-text-inverse); border-color: var(--app-text); }
-.library-entry.compact { min-height: 76px; }
-.library-entry span { display: grid; min-width: 0; gap: 4px; }
+.library-entry.compact { min-height: 64px; }
 .library-entry strong { font-size: 13px; }
-.library-entry small { color: currentColor; font-size: 11px; line-height: 1.45; opacity: .62; }
 .entry-arrow { opacity: .45; transition: transform .2s ease, opacity .2s ease; }
 .library-entry:hover .entry-arrow { opacity: 1; transform: translateX(3px); }
 @media (max-width: 720px) { .agent-grid, .resource-grid { grid-template-columns: 1fr; } }

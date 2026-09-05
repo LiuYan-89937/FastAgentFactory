@@ -36,6 +36,7 @@ from combo.dynamic_runtime.launch_context import (
     WorkspaceLaunchResolver,
 )
 from combo.resource_system import ResourceDescriptor, ResourceIdentity, ResourceStore
+from combo.runtime_defaults import DEFAULT_BUILTIN_WORKSPACE_ROOT
 from combo.runtime_protocol import (
     AttachmentRevisionRef,
     CapabilityProjectionSnapshot,
@@ -377,7 +378,7 @@ class ConversationWorkspaceLaunchResolver(WorkspaceLaunchResolver):
         workspace_root = self._conversations.require_workspace_root(workspace_id, principal_id)
         return WorkspaceLaunchProjection(
             workspace_id=workspace_id,
-            root_alias="workspace",
+            root_alias=DEFAULT_BUILTIN_WORKSPACE_ROOT,
             root_path=workspace_root,
             allow_external_paths=False,
         )

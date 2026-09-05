@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import binascii
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from hashlib import sha256
@@ -633,7 +634,11 @@ def _model_attachment_descriptor(item: dict[str, Any]) -> list[str]:
     return parts
 
 
-def image_attachment_content_parts(attachments: Any) -> list[dict[str, Any]]:
+def image_attachment_content_parts(
+    attachments: Any,
+    *,
+    workspace_path_resolver: Callable[[str], Path] | None = None,
+) -> list[dict[str, Any]]:
     if not isinstance(attachments, list) or not attachments:
         return []
     parts: list[dict[str, Any]] = []
@@ -646,9 +651,15 @@ def image_attachment_content_parts(attachments: Any) -> list[dict[str, Any]]:
         path = str(item.get("path") or item.get("runtime_path") or "").strip()
         if not path:
             continue
+        image_path = workspace_path_resolver(path) if workspace_path_resolver is not None else Path(path)
+        if not image_path.is_absolute():
+            raise AttachmentImportError(
+                f"image attachment requires a resolved absolute path: {path}",
+                path=path,
+            )
         parts.append(
             local_image_content_block(
-                path=_validated_image_path(Path(path)),
+                path=_validated_image_path(image_path),
                 mime_type=mime_type or "image/png",
             )
         )

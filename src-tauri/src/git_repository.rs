@@ -13,6 +13,7 @@ use tauri::Emitter;
 use crate::github_account::github_access_token;
 
 const MAX_DIFF_TEXT_BYTES: usize = 2 * 1024 * 1024;
+const PULL_REQUIRES_CLEAN_WORKTREE: &str = "git_pull_requires_clean_worktree";
 
 #[derive(Serialize)]
 pub struct GitRepositoryStatus {
@@ -33,6 +34,12 @@ pub struct GitRepositoryIdentity {
     name: Option<String>,
     email: Option<String>,
     configured: bool,
+}
+
+#[derive(Serialize)]
+pub struct GitRepositoryBranch {
+    name: String,
+    current: bool,
 }
 
 #[derive(Serialize)]
@@ -129,6 +136,52 @@ pub async fn git_clone_repository(
 #[tauri::command]
 pub fn git_repository_status(path: String) -> Result<GitRepositoryStatus, String> {
     let repo = discover_repository(&path)?;
+    repository_status(&repo)
+}
+
+#[tauri::command]
+pub fn git_repository_branches(path: String) -> Result<Vec<GitRepositoryBranch>, String> {
+    let repo = discover_repository(&path)?;
+    let current = repo.head().ok().and_then(|head| {
+        head.is_branch()
+            .then(|| head.shorthand().map(str::to_string))
+            .flatten()
+    });
+    let mut branches = Vec::new();
+    for candidate in repo
+        .branches(Some(git2::BranchType::Local))
+        .map_err(error_text)?
+    {
+        let (branch, _) = candidate.map_err(error_text)?;
+        let Some(name) = branch.name().map_err(error_text)? else {
+            continue;
+        };
+        branches.push(GitRepositoryBranch {
+            name: name.to_string(),
+            current: current.as_deref() == Some(name),
+        });
+    }
+    branches.sort_by(|left, right| left.name.cmp(&right.name));
+    Ok(branches)
+}
+
+#[tauri::command]
+pub fn git_switch_branch(path: String, branch: String) -> Result<GitRepositoryStatus, String> {
+    let repo = discover_repository(&path)?;
+    let branch_name = required_value(&branch, "branch name")?;
+    let local_branch = repo
+        .find_branch(branch_name, git2::BranchType::Local)
+        .map_err(|_| format!("local branch was not found: {branch_name}"))?;
+    let target = local_branch
+        .get()
+        .peel(ObjectType::Commit)
+        .map_err(error_text)?;
+    let mut checkout = CheckoutBuilder::new();
+    checkout.safe();
+    repo.checkout_tree(&target, Some(&mut checkout))
+        .map_err(error_text)?;
+    repo.set_head(&format!("refs/heads/{branch_name}"))
+        .map_err(error_text)?;
     repository_status(&repo)
 }
 
@@ -739,7 +792,7 @@ fn ensure_clean_worktree(repo: &Repository) -> Result<(), String> {
     {
         Ok(())
     } else {
-        Err("commit or discard local changes before pulling".to_string())
+        Err(PULL_REQUIRES_CLEAN_WORKTREE.to_string())
     }
 }
 

@@ -24,12 +24,15 @@
           </n-icon>
         </button>
 
-        <button
+        <div
           v-else
           class="session-row"
           :class="{ active: entry.session.session_id === activeSessionId, nested: entry.nested }"
-          type="button"
+          role="button"
+          tabindex="0"
           @click="emit('select', entry.session)"
+          @keydown.enter.prevent="emit('select', entry.session)"
+          @keydown.space.prevent="emit('select', entry.session)"
         >
           <span class="session-copy">
             <span class="session-title">{{ sessionTitle(entry.session) }}</span>
@@ -50,26 +53,31 @@
                 {{ t('sessions.turns', { count: entry.session.turn_count }) }}
               </span>
             </span>
-            <span
-              v-if="!entry.nested && entry.session.workspace?.workdir_root"
-              class="workspace-path"
-              :title="entry.session.workspace.workdir_root"
+          </span>
+          <span class="session-actions" @click.stop @keydown.stop>
+            <ControlHint
+              v-if="canRevealSession(entry.session)"
+              :label="t('workspace.revealInFileManager')"
             >
-              {{ entry.session.workspace.workdir_root }}
-            </span>
+              <button
+                type="button"
+                :aria-label="t('workspace.revealInFileManager')"
+                @click="revealSessionWorkspace(entry.session)"
+              >
+                <n-icon size="15"><FolderOpenOutline /></n-icon>
+              </button>
+            </ControlHint>
+            <ControlHint :label="t('sessions.delete')">
+              <button
+                type="button"
+                :aria-label="t('sessions.delete')"
+                @click="emit('delete', entry.session)"
+              >
+                <n-icon size="15"><TrashOutline /></n-icon>
+              </button>
+            </ControlHint>
           </span>
-          <span
-            class="session-delete"
-            role="button"
-            tabindex="0"
-            :aria-label="t('sessions.delete')"
-            @click.stop="emit('delete', entry.session)"
-            @keydown.enter.stop="emit('delete', entry.session)"
-            @keydown.space.prevent.stop="emit('delete', entry.session)"
-          >
-            <n-icon size="15"><TrashOutline /></n-icon>
-          </span>
-        </button>
+        </div>
       </template>
     </div>
 
@@ -86,7 +94,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { NEmpty, NIcon, NScrollbar, NTag } from 'naive-ui'
+import { NEmpty, NIcon, NScrollbar, NTag, useMessage } from 'naive-ui'
 import {
   ChatbubbleEllipses,
   ChevronDownOutline,
@@ -95,7 +103,12 @@ import {
   TrashOutline,
 } from '@/components/icons'
 import ComboPngIcon from '@/components/icons/ComboPngIcon.vue'
+import ControlHint from '@/components/common/ControlHint.vue'
 import { useI18n } from '@/composables/useI18n'
+import {
+  desktopWorkspaceFileActionsAvailable,
+  revealNativePath,
+} from '@/api/desktopWorkspaceFiles'
 import {
   groupSessionsByWorkspace,
   type WorkspaceGroupedSession,
@@ -146,6 +159,7 @@ const emit = defineEmits<{
 }>()
 
 const { locale, t } = useI18n()
+const message = useMessage()
 const expandedWorkspaceIds = ref<Set<string>>(new Set())
 
 const filteredSessions = computed(() => {
@@ -197,6 +211,20 @@ function workspaceKind(session: SessionHistoryItem): string {
   return session.workspace?.mode === 'project'
     ? t('sessions.sharedWorkspace')
     : t('sessions.isolatedWorkspace')
+}
+
+function canRevealSession(session: SessionHistoryItem): boolean {
+  return desktopWorkspaceFileActionsAvailable() && Boolean(session.workspace?.workdir_root)
+}
+
+async function revealSessionWorkspace(session: SessionHistoryItem) {
+  const path = session.workspace?.workdir_root
+  if (!path) return
+  try {
+    await revealNativePath(path)
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : String(error))
+  }
 }
 
 function toggleWorkspace(workspaceId: string) {
@@ -305,8 +333,7 @@ watch([() => props.activeSessionId, groupedSessions], expandActiveWorkspace, { i
 }
 
 .workspace-group-meta,
-.session-meta,
-.workspace-path {
+.session-meta {
   color: var(--app-text-muted);
   font-size: 11px;
 }
@@ -322,7 +349,7 @@ watch([() => props.activeSessionId, groupedSessions], expandActiveWorkspace, { i
   align-items: center;
   gap: 8px;
   min-height: 64px;
-  padding: 10px 38px 10px 12px;
+  padding: 10px 72px 10px 12px;
   border-radius: 12px;
   background: transparent;
   transition: background-color var(--app-transition-fast);
@@ -373,35 +400,37 @@ watch([() => props.activeSessionId, groupedSessions], expandActiveWorkspace, { i
   gap: 3px;
 }
 
-.workspace-path {
-  margin-top: 3px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.session-delete {
+.session-actions {
   position: absolute;
   right: 10px;
   top: 50%;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+  transform: translateY(-50%);
+  transition: opacity var(--app-transition-fast);
+}
+
+.session-actions button {
   width: 26px;
   height: 26px;
   display: grid;
   place-items: center;
+  padding: 0;
+  border: 0;
   border-radius: 999px;
   color: var(--app-text-muted);
-  opacity: 0;
-  transform: translateY(-50%);
-  transition: opacity var(--app-transition-fast), background-color var(--app-transition-fast);
+  background: transparent;
+  cursor: pointer;
 }
 
-.session-row:hover .session-delete,
-.session-row:focus-visible .session-delete,
-.session-delete:focus-visible {
+.session-row:hover .session-actions,
+.session-row:focus-within .session-actions {
   opacity: 1;
 }
 
-.session-delete:hover {
+.session-actions button:hover {
   color: var(--app-text);
   background: var(--app-surface-muted);
 }
@@ -414,7 +443,7 @@ watch([() => props.activeSessionId, groupedSessions], expandActiveWorkspace, { i
 @media (prefers-reduced-motion: reduce) {
   .workspace-group,
   .session-row,
-  .session-delete {
+  .session-actions {
     transition: none;
   }
 }

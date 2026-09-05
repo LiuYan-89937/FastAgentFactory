@@ -4,7 +4,6 @@
       <div>
         <span class="eyebrow">MAIN AGENT PROFILE</span>
         <h1>{{ t('mainAgentProfile.title') }}</h1>
-        <p>{{ t('mainAgentProfile.description') }}</p>
       </div>
       <div class="header-actions">
         <n-button secondary @click="router.back()">{{ t('common.back') }}</n-button>
@@ -27,7 +26,6 @@
     <section class="profile-summary">
       <div><strong>{{ selectedCount }}</strong><span>{{ t('mainAgentProfile.selected') }}</span></div>
       <div><strong>{{ poolItems.length }}</strong><span>{{ t('mainAgentProfile.available') }}</span></div>
-      <p>{{ t('mainAgentProfile.nextTurnHint') }}</p>
     </section>
 
     <section class="profile-surface">
@@ -61,7 +59,6 @@
               <strong>{{ item.display_name }}</strong>
               <span>{{ kindLabel(item.kind) }}</span>
             </div>
-            <p>{{ item.description || t('mainAgentProfile.noDescription') }}</p>
             <div class="capability-meta">
               <span>{{ item.namespace }}</span>
               <span v-if="item.health">{{ item.health }}</span>
@@ -241,15 +238,13 @@ function savedSelectedIds(value: MainAgentCapabilityProfile | null): Set<string>
 .profile-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 22px; }
 .eyebrow { color: var(--app-text-muted); font-size: 10px; font-weight: 750; letter-spacing: .14em; }
 .profile-header h1 { margin: 8px 0 7px; color: var(--app-text-strong); font-size: 32px; letter-spacing: -.035em; }
-.profile-header p { max-width: 680px; margin: 0; color: var(--app-text-muted); line-height: 1.6; }
 .header-actions { display: flex; flex: 0 0 auto; gap: 9px; }
 .profile-alert { margin-bottom: 16px; border-radius: 14px; }
 .missing-capability-alert { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-.profile-summary { display: grid; grid-template-columns: repeat(2, 110px) minmax(280px, 1fr); align-items: center; gap: 10px; margin-bottom: 18px; padding: 16px; border: 1px solid var(--app-border); border-radius: 18px; background: var(--app-surface-muted); }
+.profile-summary { display: grid; grid-template-columns: repeat(2, 110px); align-items: center; gap: 10px; margin-bottom: 18px; padding: 16px; border: 1px solid var(--app-border); border-radius: 18px; background: var(--app-surface-muted); }
 .profile-summary div { display: grid; gap: 2px; }
 .profile-summary strong { font-size: 22px; }
-.profile-summary span, .profile-summary p { color: var(--app-text-muted); font-size: 11px; }
-.profile-summary p { margin: 0; justify-self: end; text-align: right; line-height: 1.5; }
+.profile-summary span { color: var(--app-text-muted); font-size: 11px; }
 .profile-surface { min-height: 420px; padding: 18px; border: 1px solid var(--app-border); border-radius: 22px; background: var(--app-surface); }
 .toolbar { display: grid; grid-template-columns: minmax(260px, 1fr) auto auto; gap: 12px; margin-bottom: 16px; }
 .kind-filter { white-space: nowrap; }
@@ -263,8 +258,7 @@ function savedSelectedIds(value: MainAgentCapabilityProfile | null): Set<string>
 .capability-title strong { overflow: hidden; color: var(--app-text-strong); text-overflow: ellipsis; white-space: nowrap; }
 .capability-title span, .capability-title small { padding: 2px 7px; border-radius: 999px; background: var(--app-surface-pressed); color: var(--app-text-muted); font-size: 9px; }
 .capability-title small { color: var(--app-text); }
-.capability-copy p { margin: 5px 0 6px; overflow: hidden; color: var(--app-text-muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .capability-meta { display: flex; gap: 12px; color: var(--app-text-muted); font-size: 9px; }
 .loading-state, .empty-state { display: grid; min-height: 320px; place-items: center; }
-@media (max-width: 760px) { .profile-page { width: calc(100vw - 24px); padding-top: 24px; } .profile-header { align-items: stretch; flex-direction: column; } .profile-summary { grid-template-columns: repeat(3, 1fr); } .profile-summary p { grid-column: 1 / -1; justify-self: start; text-align: left; } .toolbar { grid-template-columns: 1fr; } }
+@media (max-width: 760px) { .profile-page { width: calc(100vw - 24px); padding-top: 24px; } .profile-header { align-items: stretch; flex-direction: column; } .profile-summary { grid-template-columns: repeat(2, 1fr); } .toolbar { grid-template-columns: 1fr; } }
 </style>

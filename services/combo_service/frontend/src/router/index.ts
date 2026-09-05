@@ -8,9 +8,13 @@ import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 const routes: RouteRecordRaw[] = [
   { path: '/', name: 'home', component: () => import('@/views/HomeView.vue') },
   { path: '/changelog', name: 'changelog', component: () => import('@/views/ChangelogView.vue') },
-  { path: '/admin', name: 'admin', component: () => import('@/views/AdminView.vue') },
+  {
+    path: '/ops',
+    name: 'operations',
+    component: () => import('@/views/AdminView.vue'),
+    meta: { standalone: true },
+  },
   { path: '/guide', name: 'guide', component: () => import('@/views/GuideView.vue') },
-  { path: '/auth/result', name: 'auth-result', component: () => import('@/views/AuthResultView.vue') },
   { path: '/:pathMatch(.*)*', name: 'not-found', component: () => import('@/views/NotFoundView.vue') },
 ]
 

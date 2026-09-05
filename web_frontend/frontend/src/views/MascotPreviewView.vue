@@ -4,7 +4,6 @@
       <div>
         <span class="eyebrow">PNG FRAME LAB</span>
         <h1>Combo 动作库</h1>
-        <p>双角色状态与两名角色的独立动画。所有动作均由独立 PNG 序列帧播放。</p>
       </div>
       <div class="preview-controls">
         <n-button secondary @click="paused = !paused">
@@ -20,7 +19,6 @@
     <section class="preview-section">
       <header class="section-header">
         <div><span class="eyebrow">PAIRED STATES</span><h2>协作状态</h2></div>
-        <small>工作状态由两个独立 running 动画组合，其余状态为双角色动画。</small>
       </header>
       <div class="state-grid paired-grid">
         <article v-for="item in pairedStates" :key="item.state" class="state-card">
@@ -33,7 +31,7 @@
               :aria-label="item.title"
             />
           </div>
-          <footer><strong>{{ item.title }}</strong><small>{{ item.description }}</small></footer>
+          <footer><strong>{{ item.title }}</strong></footer>
         </article>
       </div>
     </section>
@@ -41,7 +39,6 @@
     <section v-for="character in characters" :key="character.id" class="preview-section">
       <header class="section-header">
         <div><span class="eyebrow">{{ character.eyebrow }}</span><h2>{{ character.title }}</h2></div>
-        <small>单角色、单动作、独立生成；不从双角色素材裁切。</small>
       </header>
       <div class="state-grid character-grid">
         <article v-for="action in characterActions" :key="action.id" class="state-card">
@@ -55,7 +52,7 @@
               :aria-label="`${character.title}${action.title}`"
             />
           </div>
-          <footer><strong>{{ action.title }}</strong><small>{{ action.description }}</small></footer>
+          <footer><strong>{{ action.title }}</strong></footer>
         </article>
       </div>
     </section>
@@ -79,14 +76,13 @@ const fps = ref(4)
 const pairedStates: Array<{
   state: ComboMascotState
   title: string
-  description: string
 }> = [
-  { state: 'idle', title: '待机 / Idle', description: '共同呼吸与眨眼' },
-  { state: 'thinking', title: '思考 / Review', description: '收敛视线与轻微前倾' },
-  { state: 'working', title: '工作 / Running', description: '两名角色独立跑动' },
-  { state: 'waiting', title: '等待 / Approval', description: '期待用户确认' },
-  { state: 'complete', title: '完成 / Complete', description: '无手的同步庆祝节拍' },
-  { state: 'error', title: '异常 / Failed', description: '克制的失拍反馈' },
+  { state: 'idle', title: '待机 / Idle' },
+  { state: 'thinking', title: '思考 / Review' },
+  { state: 'working', title: '工作 / Running' },
+  { state: 'waiting', title: '等待 / Approval' },
+  { state: 'complete', title: '完成 / Complete' },
+  { state: 'error', title: '异常 / Failed' },
 ]
 
 const characters: Array<{
@@ -101,11 +97,10 @@ const characters: Array<{
 const characterActions: Array<{
   id: ComboCharacterAction
   title: string
-  description: string
 }> = [
-  { id: 'idle', title: '待机 / Idle', description: '低干扰呼吸与眨眼' },
-  { id: 'running', title: '跑动 / Running', description: '短腿交替步态，无新增肢体' },
-  { id: 'jumping', title: '跳跃 / Jumping', description: '预备、腾空、落地与复位' },
+  { id: 'idle', title: '待机 / Idle' },
+  { id: 'running', title: '跑动 / Running' },
+  { id: 'jumping', title: '跳跃 / Jumping' },
 ]
 </script>
 
@@ -161,12 +156,6 @@ h2 {
   letter-spacing: -.035em;
 }
 
-.preview-header p {
-  margin-top: 14px;
-  color: var(--app-text-secondary);
-  font-size: 13px;
-}
-
 .preview-controls {
   display: flex;
   align-items: center;
@@ -187,12 +176,6 @@ h2 {
 
 .section-header {
   margin-bottom: 14px;
-}
-
-.section-header small,
-.state-card small {
-  color: var(--app-text-muted);
-  font-size: 10px;
 }
 
 .state-grid {

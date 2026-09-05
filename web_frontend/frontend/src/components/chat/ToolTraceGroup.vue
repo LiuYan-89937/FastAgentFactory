@@ -59,7 +59,7 @@ const formattedTime = computed(() => new Date(props.timestamp || Date.now()).toL
 }
 
 .tool-trace-message.embedded {
-  padding: 0 0 6px;
+  padding: 0 0 3px;
 }
 
 .assistant-avatar {
@@ -100,8 +100,8 @@ const formattedTime = computed(() => new Date(props.timestamp || Date.now()).toL
   width: fit-content;
   align-items: center;
   gap: 7px;
-  margin-bottom: 5px;
-  padding: 3px 7px 3px 29px;
+  margin-bottom: 2px;
+  padding: 2px 0;
   color: var(--app-text-muted);
   font-size: 11px;
   cursor: pointer;

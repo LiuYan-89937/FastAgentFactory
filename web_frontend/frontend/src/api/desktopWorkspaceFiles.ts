@@ -16,6 +16,11 @@ export async function revealWorkspaceEntry(
   await invoke('reveal_in_file_manager', { sourcePath: resolved.native_path })
 }
 
+export async function revealNativePath(path: string): Promise<void> {
+  requireDesktopRuntime()
+  await invoke('reveal_in_file_manager', { sourcePath: path })
+}
+
 export async function saveWorkspaceFileAs(
   scope: WorkspaceScope,
   path: string,

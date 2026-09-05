@@ -15,7 +15,6 @@
           <span>01</span>
           <div>
             <strong>{{ t('knowledge.sourceSection') }}</strong>
-            <small>{{ t('knowledge.sourceSectionHint') }}</small>
           </div>
         </header>
 
@@ -60,7 +59,6 @@
             </n-alert>
             <div class="upload-zone" @dragover.prevent @drop.prevent="handleDrop">
               <n-text>{{ uploadTitle }}</n-text>
-              <n-text depth="3" class="upload-hint">{{ t('knowledge.uploadHint') }}</n-text>
               <n-space>
                 <n-button :disabled="!capabilities" @click="openFilePicker">{{ t('knowledge.selectFile') }}</n-button>
                 <n-button :disabled="!capabilities" @click="openFolderPicker">{{ t('knowledge.selectFolder') }}</n-button>
@@ -93,7 +91,6 @@
           <span>02</span>
           <div>
             <strong>{{ t('knowledge.indexSection') }}</strong>
-            <small>{{ t('knowledge.indexSectionHint') }}</small>
           </div>
         </header>
 
@@ -106,7 +103,6 @@
               @click="formData.mount_mode = 'index_only'"
             >
               <strong>{{ t('knowledge.indexOnly') }}</strong>
-              <small>{{ t('knowledge.indexOnlyHint') }}</small>
             </button>
             <button
               type="button"
@@ -115,7 +111,6 @@
               @click="formData.mount_mode = 'rag'"
             >
               <strong>{{ t('knowledge.rag') }}</strong>
-              <small>{{ t('knowledge.ragHint') }}</small>
             </button>
           </div>
         </n-form-item>
@@ -525,13 +520,6 @@ function isValidUrl(value: string): boolean {
   line-height: 1.3;
 }
 
-.knowledge-pane-header small,
-.knowledge-mode-card small {
-  color: var(--app-text-muted);
-  font-size: 12px;
-  line-height: 1.5;
-}
-
 .knowledge-basic-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -679,11 +667,6 @@ function isValidUrl(value: string): boolean {
 
 .knowledge-mode-card.is-active strong {
   color: var(--app-text-inverse);
-}
-
-.knowledge-mode-card.is-active small {
-  color: var(--app-text-inverse);
-  opacity: .72;
 }
 
 .chunk-grid {

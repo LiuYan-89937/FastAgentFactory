@@ -1,14 +1,55 @@
 import { runtimeLocale, translate } from '@/i18n'
 import { writeClipboardText } from '@/utils/clipboard'
+import { isTauri } from '@tauri-apps/api/core'
+import { open } from '@tauri-apps/plugin-shell'
 import { enhanceMermaidDiagrams } from './mermaid'
 
 const copyHandlerRoots = new WeakSet<EventTarget>()
 const copyResetTimers = new WeakMap<HTMLButtonElement, number>()
+const enhancedExternalLinks = new WeakSet<HTMLAnchorElement>()
 
 export async function enhanceRenderedMarkdown(root: ParentNode | null): Promise<void> {
   if (!root) return
   enhanceCodeCopyButtons(root)
+  enhanceExternalLinks(root)
   await enhanceMermaidDiagrams(root)
+}
+
+function enhanceExternalLinks(root: ParentNode): void {
+  root.querySelectorAll<HTMLAnchorElement>('a[href]').forEach((anchor) => {
+    if (enhancedExternalLinks.has(anchor)) return
+    const url = externalHttpUrl(anchor.href)
+    if (!url) return
+    enhancedExternalLinks.add(anchor)
+    anchor.rel = 'noopener noreferrer'
+    anchor.addEventListener('click', (event) => {
+      if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+      event.preventDefault()
+      event.stopPropagation()
+      void openExternalUrl(url)
+    })
+  })
+}
+
+function externalHttpUrl(value: string): string | null {
+  try {
+    const url = new URL(value)
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.href : null
+  } catch {
+    return null
+  }
+}
+
+async function openExternalUrl(url: string): Promise<void> {
+  try {
+    if (isTauri()) {
+      await open(url)
+      return
+    }
+    window.open(url, '_blank', 'noopener,noreferrer')
+  } catch (error) {
+    console.error('External link open failed:', error)
+  }
 }
 
 function enhanceCodeCopyButtons(root: ParentNode): void {

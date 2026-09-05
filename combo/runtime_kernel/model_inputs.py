@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
+from pathlib import Path
 from dataclasses import dataclass
 from hashlib import sha256
 from typing import Any
@@ -79,6 +81,7 @@ def build_runtime_model_input(
     system_prompt: str,
     messages: list[Any],
     tools: list[BaseTool],
+    workspace_path_resolver: Callable[[str], Path],
     node_id: str | None = None,
     image_input_enabled: bool = False,
 ) -> ModelInputEnvelope:
@@ -89,6 +92,7 @@ def build_runtime_model_input(
         messages=messages,
         node_id=node_id,
         image_input_enabled=image_input_enabled,
+        workspace_path_resolver=workspace_path_resolver,
     )
     dynamic_evidence = _dynamic_evidence_text(
         state=state,
@@ -194,6 +198,7 @@ def _history_messages(
     messages: list[Any],
     node_id: str | None,
     image_input_enabled: bool,
+    workspace_path_resolver: Callable[[str], Path],
 ) -> list[Any]:
     normalized = [message for message in messages if isinstance(message, BaseMessage)]
     normalized = _with_model_compatible_tool_content(
@@ -205,12 +210,14 @@ def _history_messages(
             state=state,
             messages=_plan_and_execute_history_messages(state=state, messages=normalized, node_id=node_id),
             image_input_enabled=image_input_enabled,
+            workspace_path_resolver=workspace_path_resolver,
         )
     if normalized:
         return _with_current_user_attachments(
             state=state,
             messages=normalized,
             image_input_enabled=image_input_enabled,
+            workspace_path_resolver=workspace_path_resolver,
         )
     user_input = str(getattr(getattr(state, "conversation", None), "current_user_input", "") or "").strip()
     messages_from_input = [HumanMessage(content=user_input)] if user_input else []
@@ -218,6 +225,7 @@ def _history_messages(
         state=state,
         messages=messages_from_input,
         image_input_enabled=image_input_enabled,
+        workspace_path_resolver=workspace_path_resolver,
     )
 
 
@@ -296,10 +304,18 @@ def _with_current_user_attachments(
     state: Any,
     messages: list[Any],
     image_input_enabled: bool,
+    workspace_path_resolver: Callable[[str], Path],
 ) -> list[Any]:
     attachments = _runtime_attachments(state)
     attachment_manifest = format_current_user_attachment_manifest(attachments)
-    image_parts = image_attachment_content_parts(attachments) if image_input_enabled else []
+    image_parts = (
+        image_attachment_content_parts(
+            attachments,
+            workspace_path_resolver=workspace_path_resolver,
+        )
+        if image_input_enabled
+        else []
+    )
     if not attachment_manifest and not image_parts:
         return messages
     target_index = _current_user_message_index(state=state, messages=messages)

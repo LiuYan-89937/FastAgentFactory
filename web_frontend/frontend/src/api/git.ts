@@ -1,5 +1,9 @@
 import { invoke, isTauri } from '@tauri-apps/api/core'
 
+export const GIT_ERROR_CODES = {
+  pullRequiresCleanWorktree: 'git_pull_requires_clean_worktree',
+} as const
+
 export type GitChangeType = 'added' | 'modified' | 'deleted' | 'renamed' | 'copied' | 'type_changed' | 'conflicted'
 
 export interface GitFileStatus {
@@ -28,6 +32,11 @@ export interface GitRepositoryIdentity {
   name: string | null
   email: string | null
   configured: boolean
+}
+
+export interface GitRepositoryBranch {
+  name: string
+  current: boolean
 }
 
 export type GitRemoteOutcome = 'fetched' | 'pulled' | 'pushed' | 'up_to_date' | 'conflicts'
@@ -78,6 +87,14 @@ export const gitApi = {
   repositoryStatus(path: string) {
     requireDesktop()
     return invoke<GitRepositoryStatus>('git_repository_status', { path })
+  },
+  repositoryBranches(path: string) {
+    requireDesktop()
+    return invoke<GitRepositoryBranch[]>('git_repository_branches', { path })
+  },
+  switchBranch(path: string, branch: string) {
+    requireDesktop()
+    return invoke<GitRepositoryStatus>('git_switch_branch', { path, branch })
   },
   initializeRepository(path: string) {
     requireDesktop()

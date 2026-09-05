@@ -4,7 +4,13 @@
     :class="[`role-${message.role}`, { streaming }]"
     :data-reference-label="`${roleLabel} · ${formatTime(message.timestamp)}`"
   >
-    <template v-if="delegatedDelivery">
+    <template v-if="runtimeErrorPart">
+      <div class="runtime-error-message">
+        <MessagePartRenderer :part="runtimeErrorPart" />
+      </div>
+    </template>
+
+    <template v-else-if="delegatedDelivery">
       <div class="delegated-delivery-message">
         <MessagePartRenderer
           v-for="part in visibleParts"
@@ -131,6 +137,11 @@ const roleLabel = computed(() => {
 })
 
 const visibleParts = computed(() => conversationVisibleParts(props.message.parts))
+const runtimeErrorPart = computed(() => {
+  if (props.message.role !== 'system' || visibleParts.value.length !== 1) return null
+  const part = visibleParts.value[0]
+  return part.type === 'error' ? part : null
+})
 type MessageDisplayBlock =
   | { kind: 'parts'; id: string; parts: ChatMessagePart[] }
   | { kind: 'tools'; id: string; executions: ToolExecutionMessagePart[]; timestamp: string }
@@ -236,14 +247,16 @@ function formatTime(timestamp: string): string {
 .message-item {
   position: relative;
   display: flex;
-  gap: 10px;
-  padding: 10px 8px;
+  gap: 8px;
+  padding: 6px 8px;
   border-radius: 12px;
   transition: background-color var(--app-transition-base);
 }
 
 .message-item:has(.delegated-delivery-message) { padding-block: var(--app-space-xs); }
 .delegated-delivery-message { min-width: 0; }
+.message-item:has(.runtime-error-message) { padding-block: var(--app-space-xs); }
+.runtime-error-message { width: 100%; min-width: 0; }
 
 .message-item.role-assistant {
   background: transparent;
@@ -283,7 +296,7 @@ function formatTime(timestamp: string): string {
 }
 
 .message-item + .message-item {
-  margin-top: 6px;
+  margin-top: 2px;
 }
 
 .message-avatar {
@@ -304,7 +317,7 @@ function formatTime(timestamp: string): string {
   align-items: baseline;
   justify-content: flex-start;
   gap: 7px;
-  margin-bottom: 5px;
+  margin-bottom: 3px;
 }
 
 .message-author {
@@ -344,7 +357,7 @@ function formatTime(timestamp: string): string {
 .message-body {
   position: relative;
   font-size: var(--app-font-lg);
-  line-height: 1.6;
+  line-height: 1.55;
 }
 
 .role-user :deep(.message-image-card) {

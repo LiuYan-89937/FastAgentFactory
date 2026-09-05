@@ -7,7 +7,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from combo.tooling.spec import ToolRiskResult
-from combo.tooling.workspace_paths import workspace_path_candidate
+from combo.tooling.workspace_paths import resolve_workspace_path
 from combo.tooling.builtins.filesystem.file_locks import WorkspaceFileLockManager
 
 
@@ -128,15 +128,9 @@ def resolve_path(
     allow_external: bool,
     allowed_roots: tuple[Path, ...] = (),
 ) -> Path:
-    candidate = workspace_path_candidate(path, root=root)
-    resolved = candidate.resolve(strict=False)
-    if allow_external:
-        return resolved
-    if _path_is_within(resolved, root):
-        return resolved
-    if any(_path_is_within(resolved, allowed_root) for allowed_root in allowed_roots):
-        return resolved
-    raise ValueError(f"path escapes filesystem root: {path}")
+    return resolve_workspace_path(
+        path, root=root, allow_external=allow_external, allowed_roots=allowed_roots,
+    )
 
 
 def path_type(path: Path) -> str:
@@ -373,14 +367,6 @@ def _relative_path_text(path: Path, *, root: Path) -> str:
         return path.relative_to(root).as_posix()
     except ValueError:
         return str(path)
-
-
-def _path_is_within(path: Path, root: Path) -> bool:
-    try:
-        path.relative_to(root)
-    except ValueError:
-        return False
-    return True
 
 
 def _workspace_path_guidance(root: Path) -> str:

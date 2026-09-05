@@ -10,7 +10,7 @@ import uuid
 from typing import Any, Callable, Mapping, TextIO
 
 from combo.tooling.builtins.process.runtime import ShellRuntime
-from combo.tooling.workspace_paths import workspace_path_candidate
+from combo.tooling.workspace_paths import resolve_workspace_path
 
 
 _OUTPUT_BUFFER_LIMIT = 1_000_000
@@ -313,17 +313,9 @@ def resolve_cwd(
     allowed_roots: tuple[Path, ...] = (),
 ) -> Path:
     value = cwd if cwd is not None and cwd.strip() else "."
-    candidate = workspace_path_candidate(value, root=root)
-    resolved = candidate.resolve(strict=False)
-    if allow_external:
-        return resolved
-    for allowed_root in (root, *allowed_roots):
-        try:
-            resolved.relative_to(allowed_root)
-            return resolved
-        except ValueError:
-            continue
-    raise ValueError(f"cwd escapes process runtime root: {value}")
+    return resolve_workspace_path(
+        value, root=root, allow_external=allow_external, allowed_roots=allowed_roots,
+    )
 
 
 def is_read_only_process_path(path: Path, *, root: Path, resources: dict[str, Any]) -> bool:

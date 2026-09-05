@@ -4,10 +4,9 @@
       <div class="title-block">
         <span class="eyebrow">CAPABILITY LIBRARY</span>
         <h1>{{ activeHeading.title }}</h1>
-        <p>{{ activeHeading.description }}</p>
       </div>
       <div class="header-tools">
-        <n-input v-model:value="query" clearable placeholder="搜索名称、说明或关键词" class="search-input">
+        <n-input v-model:value="query" clearable placeholder="搜索名称或关键词" class="search-input">
           <template #prefix><n-icon><SearchOutline /></n-icon></template>
         </n-input>
         <n-button quaternary circle :loading="loading" aria-label="刷新扩展列表" @click="loadAll">
@@ -28,7 +27,6 @@
         <div>
           <span class="pool-kicker">{{ activeHeading.kicker }}</span>
           <h2>{{ activeHeading.listTitle }}</h2>
-          <p>{{ visibleItems.length }} 项已载入，可搜索并打开编辑。</p>
         </div>
         <n-button v-if="activePool === 'mcp'" type="primary" round @click="openAddMcp">
           <template #icon><n-icon><Add /></n-icon></template>
@@ -77,7 +75,6 @@
               </span>
               <h3>{{ itemName(item) }}</h3>
             </div>
-            <p>{{ itemDescription(item) }}</p>
           </div>
           <div class="card-facts">
             <span v-for="fact in itemFacts(item)" :key="fact">{{ fact }}</span>
@@ -128,7 +125,6 @@
           <div class="mcp-detail-hero">
             <div><span class="type-pill">MCP</span><h2>{{ itemName(selectedMcpDetails) }}</h2></div>
             <span class="status" :class="{ muted: selectedMcpDetails.details.connection_status !== 'connected' }"><i />{{ selectedMcpDetails.details.connection_status === 'connected' ? '已连接' : '未连接' }}</span>
-            <p>{{ itemDescription(selectedMcpDetails) }}</p>
           </div>
           <section class="mcp-connection-facts">
             <div><small>协议</small><strong>{{ selectedMcpDetails.details.protocol_version || '—' }}</strong></div>
@@ -200,7 +196,7 @@
       <div v-if="!editingTool || isToolPackageEditor" class="creator-layout">
         <n-form label-placement="top" class="creator-form">
           <section class="form-section two-column">
-            <div class="section-title full"><strong>基本信息</strong><span>系统会据此生成并校验 TOOL.yaml。</span></div>
+            <div class="section-title full"><strong>基本信息</strong></div>
             <n-form-item label="工具标识 *"><n-input v-model:value="toolCreateForm.name" placeholder="lowercase-kebab-case" /></n-form-item>
             <n-form-item label="模型调用名称 *"><n-input v-model:value="toolCreateForm.model_alias" placeholder="lowercase_snake_case" /></n-form-item>
             <n-form-item label="显示名称 *"><n-input v-model:value="toolCreateForm.display_name" /></n-form-item>
@@ -208,7 +204,7 @@
             <n-form-item class="full" label="工具说明 *"><n-input v-model:value="toolCreateForm.description" type="textarea" :autosize="{ minRows: 3, maxRows: 6 }" /></n-form-item>
           </section>
           <section class="form-section">
-            <div class="section-row"><div class="section-title"><strong>输入参数</strong><span>参数会生成 JSON Schema，并进入能力检索索引。</span></div><n-button size="small" @click="addToolParameter">添加参数</n-button></div>
+            <div class="section-row"><div class="section-title"><strong>输入参数</strong></div><n-button size="small" @click="addToolParameter">添加参数</n-button></div>
             <div v-for="(parameter, index) in toolCreateForm.parameters" :key="index" class="parameter-card">
               <div class="parameter-head">
                 <span>参数 {{ index + 1 }}</span>
@@ -228,7 +224,7 @@
             <n-empty v-if="!toolCreateForm.parameters.length" description="该工具没有输入参数" />
           </section>
           <section class="form-section">
-            <div class="section-row"><div class="section-title"><strong>Context 键值</strong><span>值会加密保存，运行时通过 context[键名] 读取；包内 resources/ 文件仍由 main.py 自己读取。</span></div><n-button size="small" @click="addContextParameter">添加字段</n-button></div>
+            <div class="section-row"><div class="section-title"><strong>Context 键值</strong></div><n-button size="small" @click="addContextParameter">添加字段</n-button></div>
             <div v-for="(parameter, index) in toolCreateForm.context_parameters" :key="`context-${index}`" class="parameter-card">
               <div class="parameter-head"><span>Context {{ index + 1 }}</span><n-button size="tiny" quaternary @click="toolCreateForm.context_parameters.splice(index, 1)">移除</n-button></div>
               <div class="parameter-fields">
@@ -240,13 +236,12 @@
             <n-empty v-if="!toolCreateForm.context_parameters.length" description="暂无 Context 键值；工具仍可使用 resources_path 等运行时基础字段" />
           </section>
           <section class="form-section">
-            <div class="section-title"><strong>Python 依赖</strong><span>每项使用标准 requirement 格式，例如 requests&gt;=2.32。</span></div>
+            <div class="section-title"><strong>Python 依赖</strong></div>
             <n-dynamic-tags v-model:value="toolCreateForm.dependencies" />
           </section>
         </n-form>
         <section class="source-pane">
-          <div class="section-row source-header"><div class="pane-note"><strong>main.py *</strong><span>参数来自左侧表单；context 由 Combo 注入；函数必须返回 JSON 对象。</span></div><div class="source-actions"><label class="file-button" :class="{ disabled: transcriptionStatus === 'running' }">上传 main.py<input type="file" accept=".py,text/x-python" :disabled="transcriptionStatus === 'running'" @change="loadToolMainFile" /></label><label class="file-button" :class="{ disabled: transcriptionStatus === 'running' }">一键转写<input type="file" accept=".py,text/x-python" :disabled="transcriptionStatus === 'running'" @change="transcribeTool" /></label></div></div>
-          <div class="source-workflow-hint">普通 Python 脚本 → 任务模型生成草稿 → 自动回填参数和 main.py → 你校验后发布</div>
+          <div class="section-row source-header"><div class="pane-note"><strong>main.py *</strong></div><div class="source-actions"><label class="file-button" :class="{ disabled: transcriptionStatus === 'running' }">上传 main.py<input type="file" accept=".py,text/x-python" :disabled="transcriptionStatus === 'running'" @change="loadToolMainFile" /></label><label class="file-button" :class="{ disabled: transcriptionStatus === 'running' }">一键转写<input type="file" accept=".py,text/x-python" :disabled="transcriptionStatus === 'running'" @change="transcribeTool" /></label></div></div>
           <div v-if="transcriptionStatus !== 'idle'" class="transcription-progress" :class="`is-${transcriptionStatus}`" role="status" aria-live="polite">
             <div class="transcription-progress-head">
               <strong>{{ transcriptionStatus === 'running' ? '正在转写 Python 脚本' : transcriptionStatus === 'succeeded' ? '脚本转写完成' : '脚本转写失败' }}</strong>
@@ -259,12 +254,12 @@
           </div>
           <CodeEditor v-model="toolCreateForm.main_source" language="python" :min-height="600" />
           <div class="resource-upload">
-            <div class="section-row"><div class="pane-note"><strong>工具包资源文件</strong><span>可以上传 resource.yaml、模板、Schema 或其他文件，main.py 自己决定如何读取。</span></div><label class="file-button">添加资源<input type="file" multiple @change="addToolResourceFiles" /></label></div>
+            <div class="section-row"><div class="pane-note"><strong>工具包资源文件</strong></div><label class="file-button">添加资源<input type="file" multiple @change="addToolResourceFiles" /></label></div>
             <div v-if="toolResourceFiles.length" class="resource-file-list"><span v-for="resource in toolResourceFiles" :key="resource.relativePath">resources/{{ resource.relativePath }}<button type="button" @click="removeToolResource(resource.relativePath)">×</button></span></div>
             <n-empty v-else description="尚未添加资源文件" />
           </div>
           <div v-if="editingTool && toolPackageDocument" class="resource-upload">
-            <div class="pane-note"><strong>包内资源</strong><span>已有资源可直接在线编辑；二进制资源只展示文件信息。</span></div>
+            <div class="pane-note"><strong>包内资源</strong></div>
             <div v-if="toolPackageResourceFiles.length" class="resource-file-list">
               <button
                 v-for="file in toolPackageResourceFiles"
@@ -285,29 +280,28 @@
       <div v-else class="simple-tool-editor">
         <div class="editor-intro">
           <span class="type-pill">{{ editingTool?.kind === 'mcp_tool' ? 'MCP TOOL' : 'TOOL' }}</span>
-          <p>编辑名称、说明与运行策略；保存后会重新生成能力快照。</p>
         </div>
         <n-form label-placement="top" class="editor-form">
           <section class="form-section">
-            <div class="section-title"><strong>呈现给模型的信息</strong><span>名称与说明会进入模型上下文。</span></div>
+            <div class="section-title"><strong>呈现给模型的信息</strong></div>
             <n-form-item label="显示名称"><n-input v-model:value="toolForm.display_name" /></n-form-item>
             <n-form-item label="工具说明"><n-input v-model:value="toolForm.description" type="textarea" :autosize="{ minRows: 4, maxRows: 9 }" /></n-form-item>
           </section>
           <section class="form-section two-column">
-            <div class="section-title full"><strong>权限与风险</strong><span>这里定义单个工具的边界，对话级权限仍由输入框统一控制。</span></div>
+            <div class="section-title full"><strong>权限与风险</strong></div>
             <n-form-item label="审批策略"><n-select v-model:value="toolForm.approval" :options="approvalOptions" /></n-form-item>
             <n-form-item label="风险级别"><n-select v-model:value="toolForm.risk_level" :options="riskOptions" /></n-form-item>
           </section>
           <section class="form-section">
-            <div class="section-row"><div class="section-title"><strong>并发调用</strong><span>允许同一工具同时处理多个请求。</span></div><n-switch v-model:value="toolForm.allow_parallel_calls" @update:value="normalizeParallel" /></div>
+            <div class="section-row"><div class="section-title"><strong>并发调用</strong></div><n-switch v-model:value="toolForm.allow_parallel_calls" @update:value="normalizeParallel" /></div>
             <n-form-item v-if="toolForm.allow_parallel_calls" label="最大并发请求数"><n-input-number v-model:value="toolForm.max_parallel_calls" :min="1" :max="128" /></n-form-item>
             <n-form-item label="单次调用超时（秒）"><n-input-number v-model:value="toolForm.timeout_seconds" :min="1" :max="3600" /></n-form-item>
           </section>
           <section class="form-section">
-            <div class="section-title"><strong>输出控制</strong><span>限制进入模型上下文的工具结果，原始结果可独立保留。</span></div>
+            <div class="section-title"><strong>输出控制</strong></div>
             <n-form-item label="输出处理"><n-radio-group v-model:value="toolForm.output_projection"><n-space><n-radio value="compress">超限压缩</n-radio><n-radio value="passthrough">原样传递</n-radio></n-space></n-radio-group></n-form-item>
             <n-form-item v-if="toolForm.output_projection === 'compress'" label="模型可见字符上限"><n-input-number v-model:value="toolForm.output_max_model_chars" :min="1000" :max="1000000" :step="1000" /></n-form-item>
-            <div class="switch-line"><span><strong>保留原始输出</strong><small>压缩前的完整结果仍可通过输出工具读取。</small></span><n-switch v-model:value="toolForm.retain_raw_output" /></div>
+            <div class="switch-line"><strong>保留原始输出</strong><n-switch v-model:value="toolForm.retain_raw_output" /></div>
           </section>
         </n-form>
       </div>
@@ -355,7 +349,7 @@
             </n-tab-pane>
             <n-tab-pane name="instructions" tab="指令正文">
               <div class="skill-pane instruction-pane">
-                <div class="pane-note"><strong>SKILL.md</strong><span>使用 Markdown 编写完整执行约束、流程和交付标准。</span></div>
+                <div class="pane-note"><strong>SKILL.md</strong></div>
                 <n-input v-model:value="skillForm.instructions" type="textarea" class="code-editor" :autosize="{ minRows: 22, maxRows: 34 }" />
               </div>
             </n-tab-pane>
@@ -392,7 +386,6 @@
           <div>
             <span class="pool-kicker">SKILL DISCOVERY</span>
             <h2>从 SkillHub 添加</h2>
-            <p>搜索社区 Skill，安装后会进入当前能力池。</p>
           </div>
           <span class="skillhub-connection" :class="{ ready: skillHubResult?.cli_available }">
             <i />{{ skillHubResult?.cli_available ? '已连接' : '不可用' }}
@@ -460,11 +453,9 @@
         </div>
         <div v-else-if="skillHubResult?.action === 'search'" class="skillhub-empty">
           <strong>没有找到匹配的 Skill</strong>
-          <span>换一个更短、更明确的能力关键词试试。</span>
         </div>
         <div v-else-if="skillHubResult?.cli_available" class="skillhub-empty initial">
           <strong>查找可以直接加入能力池的 Skill</strong>
-          <span>使用一到三个关键词描述需要的能力。</span>
         </div>
       </div>
     </n-modal>
@@ -490,7 +481,6 @@
           <div><dt>来源</dt><dd>{{ skillHubSourceLabel(selectedSkillHubItem.source) }}</dd></div>
         </dl>
         <footer>
-          <span>安装后会直接进入 Skill 池，可继续查看并编辑完整指令与资源。</span>
           <n-button
             round
             type="primary"
@@ -661,16 +651,19 @@ const toolForm = reactive<ToolRuntimePolicyInput & { display_name: string; descr
 const skillForm = reactive<{ metadata: Record<string, unknown>; instructions: string }>({ metadata: {}, instructions: '' })
 
 const mcpServers = computed(() => capabilitiesOf('mcp_server'))
-const tools = computed(() => (snapshot.value?.capabilities || []).filter(item => item.kind === 'tool' || item.kind === 'mcp_tool'))
+const tools = computed(() => (snapshot.value?.capabilities || []).filter(item => (
+  item.kind === 'mcp_tool'
+  || (item.kind === 'tool' && item.trust_level !== 'builtin')
+)))
 const skills = computed(() => capabilitiesOf('skill'))
 const filteredMcp = computed(() => filterCapabilities(mcpServers.value))
 const filteredTools = computed(() => filterCapabilities(tools.value))
 const filteredSkills = computed(() => filterCapabilities(skills.value))
 const visibleItems = computed<PoolItem[]>(() => ({ mcp: filteredMcp.value, tools: filteredTools.value, skills: filteredSkills.value })[activePool.value])
-const headings: Record<PoolName, { kicker: string; title: string; listTitle: string; description: string; empty: string }> = {
-  mcp: { kicker: 'CONNECTIONS', title: 'MCP 池', listTitle: '已注册服务', description: '管理服务连接、凭据引用、超时、并发与发现到的工具。', empty: '暂无 MCP 服务' },
-  tools: { kicker: 'EXECUTION', title: '工具池', listTitle: '运行时工具', description: '统一管理内置工具与 MCP 工具的说明、权限、输出和并发策略。', empty: '暂无可用工具' },
-  skills: { kicker: 'INSTRUCTIONS', title: 'Skill 池', listTitle: '已解析 Skill', description: '编辑 Skill 元信息、完整指令正文以及随附资源文件。', empty: '暂无 Skill' },
+const headings: Record<PoolName, { kicker: string; title: string; listTitle: string; empty: string }> = {
+  mcp: { kicker: 'CONNECTIONS', title: 'MCP 池', listTitle: '已注册服务', empty: '暂无 MCP 服务' },
+  tools: { kicker: 'EXECUTION', title: '工具池', listTitle: '工具包与 MCP 工具', empty: '暂无可用工具' },
+  skills: { kicker: 'INSTRUCTIONS', title: 'Skill 池', listTitle: '已解析 Skill', empty: '暂无 Skill' },
 }
 const activeHeading = computed(() => headings[activePool.value])
 const isToolPackageEditor = computed(() => Boolean(
@@ -1306,13 +1299,11 @@ onBeforeUnmount(clearProbeNotice)
 .hidden-folder-input { display: none; }
 .library-page { min-height: 100%; padding: clamp(28px, 4vw, 52px); color: var(--app-text); background: var(--app-surface); }
 .library-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 32px; max-width: 1540px; margin: 0 auto 28px; }
-.title-block { max-width: 760px; }.eyebrow,.pool-kicker { display: block; margin-bottom: 9px; color: var(--app-text-muted); font-size: 10px; font-weight: 800; letter-spacing: .16em; }.title-block h1 { margin: 0; font-size: clamp(32px, 4vw, 48px); line-height: 1; letter-spacing: -.045em; }.title-block p,.pool-heading p { margin: 13px 0 0; color: var(--app-text-secondary); font-size: 13px; line-height: 1.6; }.header-tools { display: flex; align-items: center; gap: 8px; }.search-input { width: min(360px, 34vw); }
-.pool-switcher { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; max-width: 1540px; margin: 0 auto 16px; }.pool-switch { display: grid; grid-template-columns: 1fr auto; gap: 5px 14px; min-width: 0; padding: 16px 18px; color: inherit; text-align: left; border: 1px solid var(--app-border); border-radius: 14px; background: var(--app-surface); cursor: pointer; transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease; }.pool-switch:hover { transform: translateY(-1px); border-color: var(--app-border-focus); }.pool-switch.active { border-color: color-mix(in srgb, var(--app-text) 38%, var(--app-border)); box-shadow: inset 0 -2px 0 var(--app-text); }.switch-label { font-size: 12px; font-weight: 750; }.pool-switch strong { grid-row: span 2; align-self: center; font-size: 26px; letter-spacing: -.04em; }.pool-switch small { overflow: hidden; color: var(--app-text-muted); text-overflow: ellipsis; white-space: nowrap; }
+.title-block { max-width: 760px; }.eyebrow,.pool-kicker { display: block; margin-bottom: 9px; color: var(--app-text-muted); font-size: 10px; font-weight: 800; letter-spacing: .16em; }.title-block h1 { margin: 0; font-size: clamp(32px, 4vw, 48px); line-height: 1; letter-spacing: -.045em; }.header-tools { display: flex; align-items: center; gap: 8px; }.search-input { width: min(360px, 34vw); }
 .page-alert { max-width: 1540px; margin: 12px auto; }.mcp-probe-notice { display: grid; grid-template-columns: 24px minmax(0, 1fr) 24px; max-width: 1540px; align-items: center; gap: 10px; box-sizing: border-box; margin: 12px auto; padding: 11px 13px; color: var(--app-text-inverse); border: 1px solid var(--app-text); border-radius: 10px; background: var(--app-text); }.mcp-probe-notice > span { display: grid; width: 19px; height: 19px; place-items: center; color: var(--app-text); border-radius: 50%; background: var(--app-text-inverse); font-size: 10px; }.mcp-probe-notice strong { overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }.mcp-probe-notice button { padding: 0; color: var(--app-text-inverse); border: 0; background: transparent; font-size: 20px; line-height: 1; cursor: pointer; }.pool-surface { max-width: 1540px; margin: 0 auto; padding: 24px; border: 1px solid var(--app-border); border-radius: 20px; background: var(--app-surface); }.pool-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; padding: 2px 2px 22px; border-bottom: 1px solid var(--app-border); }.pool-heading h2 { margin: 0; font-size: 22px; letter-spacing: -.02em; }
-.card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; padding-top: 18px; }.pool-card { display: flex; min-height: 214px; flex-direction: column; padding: 17px 18px 14px; border: 1px solid var(--app-border); border-radius: 15px; background: var(--app-surface); cursor: pointer; transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease; }.pool-card:hover,.pool-card:focus-visible { transform: translateY(-3px); border-color: var(--app-border-focus); box-shadow: 0 14px 30px color-mix(in srgb, var(--app-text) 7%, transparent); outline: none; }.card-header,.card-footer,.card-statuses,.status,.card-buttons,.skill-editor-header,.skill-editor-header > div,.section-row,.switch-line,.card-title-line { display: flex; align-items: center; }.card-header,.card-footer,.section-row,.switch-line { justify-content: space-between; }.card-statuses { gap: 10px; }.type-pill { display: inline-flex; width: fit-content; padding: 4px 7px; border-radius: 6px; background: var(--app-text); color: var(--app-text-inverse); font-size: 9px; font-weight: 800; letter-spacing: .08em; }.status { gap: 6px; color: var(--app-text-muted); font-size: 10px; }.status i { width: 6px; height: 6px; border-radius: 50%; background: var(--app-success); }.status.indexed i { background: var(--app-text); box-shadow: none; }.status.muted i { background: var(--app-text-muted); }.card-body { flex: 1; padding: 22px 0 14px; }.card-title-line { min-width: 0; gap: 9px; }.card-tool-icon { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; width: 30px; height: 30px; border: 1px solid var(--app-border); border-radius: 9px; background: color-mix(in srgb, var(--app-text) 4%, transparent); color: var(--app-text); }.card-body h3 { margin: 0; overflow: hidden; font-size: 16px; letter-spacing: -.01em; text-overflow: ellipsis; white-space: nowrap; }.card-body p { display: -webkit-box; margin: 8px 0 0; overflow: hidden; color: var(--app-text-secondary); font-size: 12px; line-height: 1.6; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }.card-facts { display: flex; min-height: 24px; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }.card-facts span { padding: 3px 7px; border-radius: 6px; background: color-mix(in srgb, var(--app-text) 5%, transparent); color: var(--app-text-muted); font-size: 9px; }.card-footer { min-height: 30px; padding-top: 11px; border-top: 1px solid var(--app-border); color: var(--app-text-muted); font-size: 10px; }.card-buttons { gap: 1px; }.empty-state { padding: 90px 0; }
-.editor-intro { padding: 2px 0 22px; border-bottom: 1px solid var(--app-border); }.editor-intro p { margin: 12px 0 0; color: var(--app-text-muted); font-size: 12px; line-height: 1.6; }.editor-form { display: grid; gap: 14px; padding-top: 18px; }.form-section { padding: 17px; border: 1px solid var(--app-border); border-radius: 13px; }.form-section.two-column { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; }.section-title { display: grid; gap: 3px; margin-bottom: 15px; }.section-title.full { grid-column: 1 / -1; }.section-title strong,.switch-line strong { font-size: 13px; }.section-title span,.switch-line small { color: var(--app-text-muted); font-size: 11px; line-height: 1.5; }.section-row .section-title { margin-bottom: 10px; }.switch-line > span { display: grid; gap: 3px; }
-.editor-intro .n-button { margin-top: 14px; }.package-summary { display: flex; flex-wrap: wrap; gap: 8px; padding: 14px 0 0; }.package-summary span { padding: 5px 8px; border: 1px solid var(--app-border); border-radius: 7px; color: var(--app-text-secondary); font-size: 10px; }
-.creator-layout { display: grid; grid-template-columns: minmax(0, 1.08fr) minmax(0, .92fr); align-items: start; gap: 18px; }.creator-form { display: grid; min-width: 0; align-content: start; gap: 14px; }.creator-form .form-section,.source-pane { box-sizing: border-box; min-width: 0; }.parameter-card { margin-top: 10px; padding: 14px; border: 1px solid var(--app-border); border-radius: 11px; background: var(--app-surface-subtle, color-mix(in srgb, var(--app-text) 2%, transparent)); }.parameter-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 11px; }.parameter-head > span { color: var(--app-text-secondary); font-size: 11px; font-weight: 700; }.parameter-fields { display: grid; grid-template-columns: minmax(0, 1fr) 140px 82px; gap: 0 10px; }.parameter-fields :deep(.n-form-item) { min-width: 0; margin-bottom: 10px; }.parameter-description { grid-column: 1 / -1; }.required-field :deep(.n-form-item-blank) { align-items: center; }.source-pane { padding: 17px; border: 1px solid var(--app-border); border-radius: 13px; }.source-header { align-items: flex-start; gap: 14px; }.source-header .pane-note { min-width: 0; flex: 1; }.source-actions { display: flex; flex: none; flex-wrap: nowrap; justify-content: flex-end; gap: 8px; }.source-workflow-hint { margin: -2px 0 12px; color: var(--app-text-muted); font-size: 10px; line-height: 1.5; }.file-button { position: relative; display: inline-flex; min-height: 32px; align-items: center; justify-content: center; box-sizing: border-box; padding: 6px 11px; border: 1px solid var(--app-border); border-radius: 8px; color: var(--app-text); font-size: 11px; line-height: 1; white-space: nowrap; cursor: pointer; }.file-button:hover { border-color: var(--app-text); }.file-button input { position: absolute; width: 1px; height: 1px; opacity: 0; }.full { grid-column: 1 / -1; }
+.card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; padding-top: 18px; }.pool-card { display: flex; min-height: 176px; flex-direction: column; padding: 17px 18px 14px; border: 1px solid var(--app-border); border-radius: 15px; background: var(--app-surface); cursor: pointer; transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease; }.pool-card:hover,.pool-card:focus-visible { transform: translateY(-3px); border-color: var(--app-border-focus); box-shadow: 0 14px 30px color-mix(in srgb, var(--app-text) 7%, transparent); outline: none; }.card-header,.card-footer,.card-statuses,.status,.card-buttons,.skill-editor-header,.skill-editor-header > div,.section-row,.switch-line,.card-title-line { display: flex; align-items: center; }.card-header,.card-footer,.section-row,.switch-line { justify-content: space-between; }.card-statuses { gap: 10px; }.type-pill { display: inline-flex; width: fit-content; padding: 4px 7px; border-radius: 6px; background: var(--app-text); color: var(--app-text-inverse); font-size: 9px; font-weight: 800; letter-spacing: .08em; }.status { gap: 6px; color: var(--app-text-muted); font-size: 10px; }.status i { width: 6px; height: 6px; border-radius: 50%; background: var(--app-success); }.status.indexed i { background: var(--app-text); box-shadow: none; }.status.muted i { background: var(--app-text-muted); }.card-body { flex: 1; padding: 22px 0 14px; }.card-title-line { min-width: 0; gap: 9px; }.card-tool-icon { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; width: 30px; height: 30px; border: 1px solid var(--app-border); border-radius: 9px; background: color-mix(in srgb, var(--app-text) 4%, transparent); color: var(--app-text); }.card-body h3 { margin: 0; overflow: hidden; font-size: 16px; letter-spacing: -.01em; text-overflow: ellipsis; white-space: nowrap; }.card-facts { display: flex; min-height: 24px; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }.card-facts span { padding: 3px 7px; border-radius: 6px; background: color-mix(in srgb, var(--app-text) 5%, transparent); color: var(--app-text-muted); font-size: 9px; }.card-footer { min-height: 30px; padding-top: 11px; border-top: 1px solid var(--app-border); color: var(--app-text-muted); font-size: 10px; }.card-buttons { gap: 1px; }.empty-state { padding: 90px 0; }
+.editor-intro { padding: 2px 0 18px; border-bottom: 1px solid var(--app-border); }.editor-form { display: grid; gap: 14px; padding-top: 18px; }.form-section { padding: 17px; border: 1px solid var(--app-border); border-radius: 13px; }.form-section.two-column { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; }.section-title { display: grid; margin-bottom: 15px; }.section-title.full { grid-column: 1 / -1; }.section-title strong,.switch-line strong { font-size: 13px; }.section-row .section-title { margin-bottom: 10px; }
+.creator-layout { display: grid; grid-template-columns: minmax(0, 1.08fr) minmax(0, .92fr); align-items: start; gap: 18px; }.creator-form { display: grid; min-width: 0; align-content: start; gap: 14px; }.creator-form .form-section,.source-pane { box-sizing: border-box; min-width: 0; }.parameter-card { margin-top: 10px; padding: 14px; border: 1px solid var(--app-border); border-radius: 11px; background: var(--app-surface-subtle, color-mix(in srgb, var(--app-text) 2%, transparent)); }.parameter-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 11px; }.parameter-head > span { color: var(--app-text-secondary); font-size: 11px; font-weight: 700; }.parameter-fields { display: grid; grid-template-columns: minmax(0, 1fr) 140px 82px; gap: 0 10px; }.parameter-fields :deep(.n-form-item) { min-width: 0; margin-bottom: 10px; }.parameter-description { grid-column: 1 / -1; }.required-field :deep(.n-form-item-blank) { align-items: center; }.source-pane { padding: 17px; border: 1px solid var(--app-border); border-radius: 13px; }.source-header { align-items: flex-start; gap: 14px; }.source-header .pane-note { min-width: 0; flex: 1; }.source-actions { display: flex; flex: none; flex-wrap: nowrap; justify-content: flex-end; gap: 8px; }.file-button { position: relative; display: inline-flex; min-height: 32px; align-items: center; justify-content: center; box-sizing: border-box; padding: 6px 11px; border: 1px solid var(--app-border); border-radius: 8px; color: var(--app-text); font-size: 11px; line-height: 1; white-space: nowrap; cursor: pointer; }.file-button:hover { border-color: var(--app-text); }.file-button input { position: absolute; width: 1px; height: 1px; opacity: 0; }.full { grid-column: 1 / -1; }
 .creator-progress { margin-top: 16px; }
 .transcription-progress { display: grid; gap: 7px; margin: -2px 0 12px; padding: 10px 12px; border: 1px solid var(--app-border); border-radius: 10px; color: var(--app-text-secondary); background: var(--app-surface-subtle, color-mix(in srgb, var(--app-text) 3%, transparent)); }
 .transcription-progress-head { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 12px; }
@@ -1338,7 +1329,6 @@ onBeforeUnmount(clearProbeNotice)
 .skillhub-panel { display: grid; gap: 20px; padding: 30px; }
 .skillhub-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; }
 .skillhub-header h2 { margin: 0; font-size: 25px; letter-spacing: -.035em; }
-.skillhub-header p { margin: 8px 0 0; color: var(--app-text-secondary); font-size: 12px; }
 .skillhub-connection { display: inline-flex; flex: none; align-items: center; gap: 7px; margin-top: 3px; padding: 6px 10px; color: var(--app-text); border: 1px solid var(--app-border); border-radius: 999px; background: var(--app-surface); font-size: 10px; }
 .skillhub-connection i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 .skillhub-connection.ready { color: var(--app-text-inverse); border-color: var(--app-text); background: var(--app-text); }
@@ -1367,7 +1357,6 @@ onBeforeUnmount(clearProbeNotice)
 .skillhub-empty { display: grid; min-height: 180px; place-content: center; gap: 6px; color: var(--app-text); text-align: center; border: 1px dashed var(--app-border); border-radius: 16px; }
 .skillhub-empty.initial { min-height: 150px; }
 .skillhub-empty strong { color: var(--app-text); font-size: 12px; }
-.skillhub-empty span { color: var(--app-text-muted); font-size: 10px; }
 .skillhub-preview { display: grid; grid-template-columns: minmax(260px, .7fr) minmax(0, 1.3fr); align-content: start; gap: 18px 30px; padding: 30px; color: var(--app-text); }
 .skillhub-preview > header { display: flex; align-items: center; gap: 14px; }
 .skillhub-preview-mark { width: 52px; height: 52px; border-radius: 16px; font-size: 18px; }
@@ -1378,9 +1367,8 @@ onBeforeUnmount(clearProbeNotice)
 .skillhub-preview dl > div { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 18px; padding: 13px 0; border-bottom: 1px solid var(--app-border); }
 .skillhub-preview dt { font-size: 10px; font-weight: 750; }
 .skillhub-preview dd { min-width: 0; margin: 0; color: var(--app-text-secondary); font-size: 11px; overflow-wrap: anywhere; }
-.skillhub-preview footer { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 20px; }
-.skillhub-preview footer > span { max-width: 390px; color: var(--app-text-muted); font-size: 10px; line-height: 1.6; }
-.mcp-detail-hero { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px 18px; padding-bottom: 18px; border-bottom: 1px solid var(--app-border); }.mcp-detail-hero > div { display: flex; min-width: 0; align-items: center; gap: 10px; }.mcp-detail-hero h2 { margin: 0; overflow: hidden; font-size: 20px; text-overflow: ellipsis; white-space: nowrap; }.mcp-detail-hero p { grid-column: 1 / -1; margin: 0; color: var(--app-text-secondary); font-size: 12px; line-height: 1.6; }.mcp-connection-facts { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; margin-top: 18px; overflow: hidden; border: 1px solid var(--app-border); border-radius: 12px; background: var(--app-border); }.mcp-connection-facts > div { display: grid; gap: 4px; padding: 13px; background: var(--app-surface); }.mcp-connection-facts small { color: var(--app-text-muted); font-size: 9px; }.mcp-connection-facts strong { overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }.mcp-detail-tabs { margin-top: 18px; }.mcp-catalog-list { display: grid; gap: 8px; padding-top: 8px; }.mcp-catalog-list article { display: grid; gap: 5px; padding: 13px; border: 1px solid var(--app-border); border-radius: 11px; }.mcp-catalog-list strong { font-size: 12px; }.mcp-catalog-list p { margin: 0; color: var(--app-text-secondary); font-size: 10px; line-height: 1.55; }.mcp-catalog-list code { overflow-wrap: anywhere; color: var(--app-text-muted); font-size: 9px; }
+.skillhub-preview footer { grid-column: 1 / -1; display: flex; align-items: center; justify-content: flex-end; }
+.mcp-detail-hero { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px 18px; padding-bottom: 18px; border-bottom: 1px solid var(--app-border); }.mcp-detail-hero > div { display: flex; min-width: 0; align-items: center; gap: 10px; }.mcp-detail-hero h2 { margin: 0; overflow: hidden; font-size: 20px; text-overflow: ellipsis; white-space: nowrap; }.mcp-connection-facts { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; margin-top: 18px; overflow: hidden; border: 1px solid var(--app-border); border-radius: 12px; background: var(--app-border); }.mcp-connection-facts > div { display: grid; gap: 4px; padding: 13px; background: var(--app-surface); }.mcp-connection-facts small { color: var(--app-text-muted); font-size: 9px; }.mcp-connection-facts strong { overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }.mcp-detail-tabs { margin-top: 18px; }.mcp-catalog-list { display: grid; gap: 8px; padding-top: 8px; }.mcp-catalog-list article { display: grid; gap: 5px; padding: 13px; border: 1px solid var(--app-border); border-radius: 11px; }.mcp-catalog-list strong { font-size: 12px; }.mcp-catalog-list p { margin: 0; color: var(--app-text-secondary); font-size: 10px; line-height: 1.55; }.mcp-catalog-list code { overflow-wrap: anywhere; color: var(--app-text-muted); font-size: 9px; }
 .mcp-log-list { display: grid; gap: 6px; padding-top: 8px; }.mcp-log-list > p { display: grid; grid-template-columns: 62px minmax(0, 1fr); gap: 10px; margin: 0; padding: 9px 11px; border: 1px solid var(--app-border); border-radius: 9px; }.mcp-log-list span { color: var(--app-text-muted); font-size: 9px; text-transform: uppercase; }.mcp-log-list code { overflow-wrap: anywhere; font-size: 9px; }
 .mcp-resource-row { grid-template-columns: minmax(0, 1fr) auto; }.mcp-resource-row > p,.mcp-resource-row > code { grid-column: 1; }.mcp-resource-row > .n-button { grid-column: 2; grid-row: 1 / span 3; align-self: center; }.mcp-resource-preview { margin-top: 12px; padding: 12px; overflow: auto; border: 1px solid var(--app-border); border-radius: 11px; }.mcp-resource-preview img { display: block; max-width: 100%; max-height: 460px; margin: auto; object-fit: contain; }.mcp-resource-preview audio { width: 100%; }.mcp-resource-preview pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 11px; }
 .mcp-catalog-configurable { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 6px 12px; }.mcp-catalog-configurable > strong,.mcp-catalog-configurable > p,.mcp-catalog-configurable > code,.mcp-catalog-configurable > .mcp-argument-grid { grid-column: 1; }.mcp-catalog-configurable > .n-button { grid-column: 2; grid-row: 1 / span 4; align-self: center; }.mcp-argument-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin-top: 4px; }.mcp-prompt-preview > strong { display: block; margin-bottom: 10px; }.mcp-prompt-preview article + article { margin-top: 12px; }.mcp-prompt-preview small { display: block; margin-bottom: 5px; color: var(--app-text-secondary); font-weight: 700; text-transform: uppercase; }

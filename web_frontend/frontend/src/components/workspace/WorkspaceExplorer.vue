@@ -15,24 +15,27 @@
         <n-text strong>{{ t('workspace.explorer') }}</n-text>
       </div>
       <n-space :size="6">
-        <n-button
-          v-if="canMountDirectory"
-          size="small"
-          quaternary
-          circle
-          :loading="mountingDirectory"
-          :title="t('workspace.mountDirectory')"
-          @click="mountLocalDirectory"
-        >
-          <template #icon>
-            <n-icon><FolderOpenOutline /></n-icon>
-          </template>
-        </n-button>
-        <n-button size="small" quaternary circle :aria-label="t('common.refresh')" :title="t('common.refresh')" @click="refreshTree">
-          <template #icon>
-            <n-icon><Refresh /></n-icon>
-          </template>
-        </n-button>
+        <ControlHint v-if="canMountDirectory" :label="t('workspace.mountDirectory')" placement="bottom">
+          <n-button
+            size="small"
+            quaternary
+            circle
+            :loading="mountingDirectory"
+            :aria-label="t('workspace.mountDirectory')"
+            @click="mountLocalDirectory"
+          >
+            <template #icon>
+              <n-icon><FolderOpenOutline /></n-icon>
+            </template>
+          </n-button>
+        </ControlHint>
+        <ControlHint :label="t('common.refresh')" placement="bottom">
+          <n-button size="small" quaternary circle :aria-label="t('common.refresh')" @click="refreshTree">
+            <template #icon>
+              <n-icon><Refresh /></n-icon>
+            </template>
+          </n-button>
+        </ControlHint>
       </n-space>
     </div>
 
@@ -78,25 +81,31 @@
             {{ formatFileSize(row.entry.sizeBytes) }}
           </span>
           <div v-if="row.entry.mount" class="entry-actions" @click.stop>
-            <n-button
-              quaternary
-              circle
-              size="tiny"
-              :title="t('workspace.unmountDirectory')"
-              @click="confirmUnmount(row.entry)"
-            >
-              <template #icon><n-icon><UnlinkOutline /></n-icon></template>
-            </n-button>
+            <ControlHint :label="t('workspace.unmountDirectory')">
+              <n-button
+                quaternary
+                circle
+                size="tiny"
+                :aria-label="t('workspace.unmountDirectory')"
+                @click="confirmUnmount(row.entry)"
+              >
+                <template #icon><n-icon><UnlinkOutline /></n-icon></template>
+              </n-button>
+            </ControlHint>
           </div>
           <div v-if="row.entry.kind === 'file'" class="entry-actions" @click.stop>
-            <n-button quaternary circle size="tiny" :title="t('references.addWorkspaceFile')" @click="addFileReference(row.entry)">
-              <template #icon><n-icon><AddCircleOutline /></n-icon></template>
-            </n-button>
+            <ControlHint :label="t('references.addWorkspaceFile')">
+              <n-button quaternary circle size="tiny" :aria-label="t('references.addWorkspaceFile')" @click="addFileReference(row.entry)">
+                <template #icon><n-icon><AddCircleOutline /></n-icon></template>
+              </n-button>
+            </ControlHint>
             <n-popconfirm @positive-click="deleteFile(row.entry)">
               <template #trigger>
-                <n-button quaternary circle size="tiny" type="error" :title="t('workspace.deleteFile')">
-                  <template #icon><n-icon><TrashOutline /></n-icon></template>
-                </n-button>
+                <ControlHint :label="t('workspace.deleteFile')">
+                  <n-button quaternary circle size="tiny" type="error" :aria-label="t('workspace.deleteFile')">
+                    <template #icon><n-icon><TrashOutline /></n-icon></template>
+                  </n-button>
+                </ControlHint>
               </template>
               {{ t('workspace.deleteFileConfirm', { name: row.entry.name }) }}
             </n-popconfirm>
@@ -143,6 +152,7 @@ import {
 } from '@/components/icons'
 import ResourceIcon from '@/components/common/ResourceIcon.vue'
 import ComboPngIcon from '@/components/icons/ComboPngIcon.vue'
+import ControlHint from '@/components/common/ControlHint.vue'
 import { useRuntimeStore } from '@/stores/runtime'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useCommand } from '@/composables/useCommand'

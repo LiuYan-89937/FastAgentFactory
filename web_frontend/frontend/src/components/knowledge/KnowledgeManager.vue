@@ -26,7 +26,6 @@
     <div v-if="embeddingConfigurationMissing && !embeddingConfigurationLoading" class="embedding-guidance">
       <div class="embedding-guidance-copy">
         <n-text strong>{{ t('knowledge.embeddingModelMissing') }}</n-text>
-        <n-text depth="3">{{ t('knowledge.embeddingModelMissingHint') }}</n-text>
       </div>
       <button type="button" class="embedding-guidance-link" @click="openModelPool">
         <span>{{ t('knowledge.configureEmbeddingModel') }}</span>

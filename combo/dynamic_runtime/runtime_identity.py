@@ -1,12 +1,14 @@
 from __future__ import annotations
 
-from collections.abc import Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from contextvars import ContextVar, Token
+from pathlib import Path
 from types import MappingProxyType
 from typing import Any
 
 from combo.runtime_protocol import RuntimeExecutionIdentity, RuntimeInstance
+from combo.tooling.workspace_paths import resolve_workspace_path
 
 
 def runtime_execution_identity(instance: RuntimeInstance) -> RuntimeExecutionIdentity:
@@ -46,7 +48,8 @@ def runtime_execution_identity(instance: RuntimeInstance) -> RuntimeExecutionIde
 class RuntimeScopedContextResources:
     """Expose immutable execution context only inside the claimed runtime scope."""
 
-    def __init__(self) -> None:
+    def __init__(self, workspace_root_resolver: Callable[[str, str], str]) -> None:
+        self._workspace_root_resolver = workspace_root_resolver
         self._identity: ContextVar[RuntimeExecutionIdentity | None] = ContextVar(
             "dynamic_runtime_execution_identity",
             default=None,
@@ -69,3 +72,10 @@ class RuntimeScopedContextResources:
         if identity is None:
             raise RuntimeError("runtime execution context is not bound")
         return MappingProxyType({"runtime_identity": identity})
+
+    def resolve_workspace_path(self, value: str) -> Path:
+        identity = self._identity.get()
+        if identity is None:
+            raise RuntimeError("runtime execution context is not bound")
+        root = self._workspace_root_resolver(identity.workspace_id, identity.principal_id)
+        return resolve_workspace_path(value, root=Path(root))

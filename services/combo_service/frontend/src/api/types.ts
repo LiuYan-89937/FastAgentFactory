@@ -3,14 +3,6 @@
  * Pages and stores must import from here rather than redeclaring shapes.
  */
 
-export interface HubUser {
-  user_id: string
-  github_login: string
-  display_name: string
-  avatar_url: string
-  is_admin: boolean
-}
-
 /** Signed OSS PUT request returned by POST /uploads. */
 export interface UploadRequest {
   method: string
@@ -94,4 +86,26 @@ export interface ApiErrorBody {
   code: string
   message: string
   request_id?: string
+}
+
+export type ErrorReportStatus = 'new' | 'reviewed' | 'resolved'
+
+export interface ErrorReportSummary {
+  error_report_id: string
+  status: ErrorReportStatus
+  source: string
+  app_version: string
+  platform: string
+  architecture: string
+  error_code: string
+  summary: string
+  request_id: string
+  diagnostic_ref: string
+  created_at: string
+  updated_at: string
+}
+
+export interface ErrorReport extends ErrorReportSummary {
+  context: Record<string, unknown>
+  log_excerpt: string
 }

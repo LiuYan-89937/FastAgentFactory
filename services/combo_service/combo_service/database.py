@@ -9,7 +9,7 @@ from typing import Iterator
 from combo_service.config import Settings
 
 
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 SQLITE_BUSY_TIMEOUT_MS = 10_000
 
 
@@ -160,6 +160,27 @@ class Database:
                   detail_json text,
                   created_at text not null
                 );
+
+                create table if not exists error_reports (
+                  error_report_id text primary key,
+                  status text not null default 'new'
+                    check (status in ('new', 'reviewed', 'resolved')),
+                  source text not null,
+                  app_version text not null,
+                  platform text not null,
+                  architecture text not null,
+                  error_code text,
+                  summary text not null,
+                  request_id text,
+                  diagnostic_ref text,
+                  context_json text not null,
+                  log_excerpt text not null,
+                  created_at text not null,
+                  updated_at text not null
+                );
+
+                create index if not exists idx_error_reports_status_created
+                on error_reports(status, created_at desc);
                 """
             )
             _add_column_if_missing(

@@ -1,24 +1,49 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
-import { storeToRefs } from 'pinia'
+import { onMounted, ref } from 'vue'
 import AppReleaseManager from '@/components/admin/AppReleaseManager.vue'
+import ErrorReportManager from '@/components/admin/ErrorReportManager.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
-import BaseIcon from '@/components/base/BaseIcon.vue'
 import StateBlock from '@/components/base/StateBlock.vue'
-import { useAuthStore } from '@/stores/auth'
+import { verifyAdminAccess } from '@/api/appReleases'
+import { clearAdminAccess, initializeAdminAccess } from '@/api/adminAccess'
+import { ApiError, NetworkError } from '@/api/client'
 import { useSeo } from '@/composables/useSeo'
 
-const auth = useAuthStore()
-const { user, resolved, loading, isAuthenticated, isAdmin } = storeToRefs(auth)
+const activeSection = ref<'releases' | 'errors'>('releases')
+const accessState = ref<'checking' | 'granted' | 'invalid' | 'unavailable'>('checking')
+const accessError = ref('')
 
 useSeo(() => ({
   title: '管理控制台',
-  description: 'Combo 应用发布与更新日志管理控制台。',
-  path: '/admin',
+  description: 'Combo 应用发布与错误上报管理控制台。',
+  path: '/ops',
   noindex: true,
 }))
 
-onMounted(() => auth.ensure())
+async function authorize(): Promise<void> {
+  accessState.value = 'checking'
+  accessError.value = ''
+  if (!initializeAdminAccess()) {
+    accessState.value = 'invalid'
+    return
+  }
+  try {
+    await verifyAdminAccess()
+    accessState.value = 'granted'
+  } catch (error) {
+    if (error instanceof ApiError && [401, 403].includes(error.status)) {
+      clearAdminAccess()
+      accessState.value = 'invalid'
+      return
+    }
+    accessState.value = 'unavailable'
+    accessError.value = error instanceof NetworkError
+      ? '暂时无法连接管理服务，请稍后重试。'
+      : '管理服务暂时不可用。'
+  }
+}
+
+onMounted(authorize)
 </script>
 
 <template>
@@ -26,35 +51,40 @@ onMounted(() => auth.ensure())
     <section class="admin__hero">
       <div class="container admin__hero-inner">
         <div>
-          <span class="eyebrow">Administration</span>
+          <span class="eyebrow">Operations</span>
           <h1>管理控制台</h1>
-          <p>管理桌面应用版本、安装包与更新日志。</p>
+          <p>管理桌面应用版本、安装包、更新日志与用户错误上报。</p>
         </div>
-        <span v-if="user" class="admin__identity">
-          <img v-if="user.avatar_url" :src="user.avatar_url" alt="" width="32" height="32" />
-          {{ user.github_login }}
-        </span>
       </div>
     </section>
 
     <main class="container admin__body">
-      <StateBlock v-if="!resolved && loading" kind="loading" title="正在确认管理员身份" />
-      <section v-else-if="!isAuthenticated" class="gate">
-        <span><BaseIcon name="github" :size="28" /></span>
-        <h2>登录管理控制台</h2>
-        <p>请使用已加入管理员白名单的 GitHub 账号登录。</p>
-        <BaseButton icon="github" size="lg" @click="auth.login('/admin')">
-          使用 GitHub 登录
-        </BaseButton>
-      </section>
+      <StateBlock v-if="accessState === 'checking'" kind="loading" title="正在验证管理地址" />
       <StateBlock
-        v-else-if="!isAdmin"
+        v-else-if="accessState === 'invalid'"
         kind="error"
-        title="没有管理员权限"
-        body="当前 GitHub 账号不在管理员白名单中。"
+        title="管理地址无效"
+        body="请使用包含访问凭证的完整管理地址。"
       />
+      <section v-else-if="accessState === 'unavailable'" class="gate">
+        <StateBlock kind="error" title="无法连接管理服务" :body="accessError" />
+        <BaseButton variant="secondary" @click="authorize">重新连接</BaseButton>
+      </section>
       <template v-else>
-        <AppReleaseManager />
+        <nav class="tabs" aria-label="管理功能">
+          <button
+            type="button"
+            :class="{ tabs__active: activeSection === 'releases' }"
+            @click="activeSection = 'releases'"
+          >版本发布</button>
+          <button
+            type="button"
+            :class="{ tabs__active: activeSection === 'errors' }"
+            @click="activeSection = 'errors'"
+          >错误上报</button>
+        </nav>
+        <AppReleaseManager v-if="activeSection === 'releases'" />
+        <ErrorReportManager v-else />
       </template>
     </main>
   </div>
@@ -81,16 +111,6 @@ onMounted(() => auth.ensure())
 .admin__hero p {
   margin-top: var(--space-3);
   color: var(--text-secondary);
-}
-.admin__identity {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  color: var(--text-secondary);
-  font-size: 13px;
-}
-.admin__identity img {
-  border-radius: 50%;
 }
 .admin__body {
   padding-block: var(--space-8) var(--space-24);
@@ -123,27 +143,9 @@ onMounted(() => auth.ensure())
 .gate {
   display: grid;
   justify-items: center;
+  gap: var(--space-4);
   max-width: 560px;
   margin: var(--space-12) auto;
-  padding: var(--space-12);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
   text-align: center;
-}
-.gate > span {
-  display: grid;
-  place-items: center;
-  width: 56px;
-  height: 56px;
-  border-radius: var(--radius-md);
-  background: var(--surface-subtle);
-}
-.gate h2 {
-  margin: var(--space-4) 0 var(--space-2);
-  color: var(--text-strong);
-}
-.gate p {
-  margin-bottom: var(--space-6);
-  color: var(--text-secondary);
 }
 </style>

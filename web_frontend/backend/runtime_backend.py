@@ -2099,6 +2099,7 @@ class RuntimeBackend:
             capability_invocation_registry = registry_factory
             return DynamicRuntimeServicesFactory(
                 snapshot_tool_registries=registry_factory,
+                workspace_root_resolver=stores.conversations.require_workspace_root,
                 checkpointer=checkpointer,
                 graph_store=graph_store,
                 context_system=context_system,

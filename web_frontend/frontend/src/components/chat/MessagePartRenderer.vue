@@ -90,6 +90,11 @@
       :workspace-context="workspaceContext"
     />
 
+    <RuntimeErrorCard
+      v-else-if="part.type === 'error'"
+      :part="part"
+    />
+
     <a
       v-else-if="part.type === 'artifact' && artifactImageUrl"
       class="message-image-card"
@@ -116,10 +121,6 @@
       </span>
     </a>
 
-    <div v-else-if="part.type === 'error'" class="error-part">
-      {{ part.message }}
-    </div>
-
     <div v-else-if="part.type === 'status'" class="status-part">
       {{ part.message }}
     </div>
@@ -142,6 +143,7 @@
 import { computed, ref } from 'vue'
 import ResourceIcon from '@/components/common/ResourceIcon.vue'
 import ToolExecutionCard from '@/components/chat/ToolExecutionCard.vue'
+import RuntimeErrorCard from '@/components/chat/RuntimeErrorCard.vue'
 import StreamingReasoningText from '@/components/chat/StreamingReasoningText.vue'
 import { useI18n } from '@/composables/useI18n'
 import { useMarkdownRenderer } from '@/composables/useMarkdownRenderer'
@@ -362,7 +364,7 @@ function escapeRegExp(value: string): string {
 .delegated-delivery-chevron { color: var(--app-text-muted); }
 
 .message-part + .message-part {
-  margin-top: 6px;
+  margin-top: 4px;
 }
 
 .message-part :deep(.markdown-content > :first-child) {
@@ -384,7 +386,7 @@ function escapeRegExp(value: string): string {
   align-items: center;
   justify-content: flex-start;
   gap: var(--app-space-xs);
-  padding: var(--app-space-xs) 0;
+  padding: 2px 0;
   cursor: pointer;
   color: var(--app-text-muted);
   font-size: 13px;
@@ -518,7 +520,6 @@ details[open] > summary .summary-chevron {
 
 .inline-tool-part,
 .artifact-part,
-.error-part,
 .status-part {
   border: 1px solid var(--app-border);
   border-radius: var(--app-radius-md);
@@ -526,7 +527,6 @@ details[open] > summary .summary-chevron {
 }
 
 .artifact-part,
-.error-part,
 .status-part {
   padding: var(--app-space-sm) var(--app-space-md);
 }
@@ -567,7 +567,7 @@ details[open] > summary .summary-chevron {
   align-items: center;
   justify-content: space-between;
   gap: var(--app-space-sm);
-  padding: 10px var(--app-space-md);
+  padding: 7px 10px;
   font-size: 13px;
   color: var(--app-text);
   cursor: pointer;

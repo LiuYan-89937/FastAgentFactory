@@ -1,6 +1,6 @@
 # Combo 发布服务
 
-该服务独立于桌面运行时，只负责官网、GitHub OAuth、桌面应用版本、更新日志、安装包下载计数和 Tauri Updater 清单。它不保存、校验、发布或分发运行时能力。
+该服务独立于桌面运行时，只负责官网、桌面端 GitHub OAuth、桌面应用版本、更新日志、错误上报、安装包下载计数和 Tauri Updater 清单。它不保存、校验、发布或分发运行时能力。
 
 ## 架构
 
@@ -9,26 +9,26 @@
 - 对象存储：私有阿里云 OSS，管理端通过签名 URL 直传发布资产。
 - Worker：独立进程从 OSS 流式转发资产到 GitHub Release，不在 API 事件循环中执行上传。
 - 备份：systemd timer 使用 SQLite online backup API 生成一致性备份并上传 OSS。
-- 前端：公开官网、更新日志和下载入口；管理员控制台只管理应用 Release。
+- 前端：公开官网、更新日志和下载入口；独立运维控制台管理应用 Release 与错误上报。
 
 ## 认证
 
-审核控制台和桌面端登录共用 GitHub Browser OAuth：
+桌面端登录使用 GitHub Browser OAuth：
 
 ```text
 Authorization callback URL:
 https://liuyanai.top/api/v1/auth/github/callback
 ```
 
-OAuth Client Secret 只允许保存在服务器 `/etc/combo-service.env`。审核控制台使用 HttpOnly Cookie；桌面端通过一次性登录票据兑换独立 Bearer 会话和 GitHub 用户令牌。GitHub 用户令牌只在登录票据有效期内以加密信封短暂保存，领取后原子删除，随后由桌面端写入系统钥匙串；令牌不写入 Web 存储或日志。客户端不接收 OAuth Client Secret 或管理员令牌。
+OAuth Client Secret 只允许保存在服务器环境文件。桌面端通过一次性登录票据兑换独立 Bearer 会话和 GitHub 用户令牌。GitHub 用户令牌只在登录票据有效期内以加密信封短暂保存，领取后原子删除，随后由桌面端写入系统钥匙串；令牌不写入 Web 存储或日志。客户端不接收 OAuth Client Secret 或管理员令牌。
 
 管理员入口：
 
 ```text
-https://liuyanai.top/admin
+https://liuyanai.top/ops#token=<COMBO_SERVICE_ADMIN_TOKEN>
 ```
 
-只有 `COMBO_SERVICE_ADMIN_GITHUB_LOGINS` 中的 GitHub 用户可以访问管理员 API。未配置 OAuth App 时，可使用部署时配置的 bootstrap administrator bearer token 完成初始化管理。
+该入口不出现在主页、导航或站点地图中。前端从 URL fragment 读取令牌并立即清理地址栏，只在当前标签页的 `sessionStorage` 中保留；管理 API 仍使用 `COMBO_SERVICE_ADMIN_TOKEN` Bearer 鉴权，不允许匿名访问。
 
 ## API
 

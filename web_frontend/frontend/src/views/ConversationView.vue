@@ -76,7 +76,7 @@
             :placeholder="inputPlaceholder"
             :disabled="inputDisabled"
             :disabled-hint="modelConfigurationMissing ? t('chat.configureModelLink') : ''"
-            :disabled-hint-route="{ name: 'ModelPool' }"
+            :disabled-hint-route="{ name: 'ModelPool', query: { tab: 'credentials' } }"
             :is-running="runtimeStore.hasActiveRun"
             :queued-count="runtimeStore.queuedRequestCount"
             :queued-messages="runtimeStore.queuedMessages"

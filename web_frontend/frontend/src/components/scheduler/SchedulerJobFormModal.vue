@@ -9,7 +9,6 @@
       <div class="modal-heading">
         <span class="modal-kicker">{{ t('scheduler.editorKicker') }}</span>
         <h2>{{ t('scheduler.createTitle') }}</h2>
-        <p>{{ t('scheduler.createSubtitle') }}</p>
       </div>
     </template>
 
@@ -19,7 +18,6 @@
           <span class="section-index">01</span>
           <div>
             <h3>{{ t('scheduler.sectionScope') }}</h3>
-            <p>{{ t('scheduler.scopeDescription') }}</p>
           </div>
         </div>
 
@@ -47,7 +45,6 @@
           <span class="section-index">02</span>
           <div>
             <h3>{{ t('scheduler.sectionTask') }}</h3>
-            <p>{{ t('scheduler.taskTypeDescription') }}</p>
           </div>
         </div>
 
@@ -62,7 +59,6 @@
             <span class="option-mark">A</span>
             <span class="option-copy">
               <strong>{{ t('scheduler.agentTask') }}</strong>
-              <small>{{ t('scheduler.agentTaskDescription') }}</small>
             </span>
             <span class="selection-dot" aria-hidden="true" />
           </button>
@@ -76,7 +72,6 @@
             <span class="option-mark">&gt;_</span>
             <span class="option-copy">
               <strong>{{ t('scheduler.scriptTask') }}</strong>
-              <small>{{ t('scheduler.scriptTaskDescription') }}</small>
             </span>
             <span class="selection-dot" aria-hidden="true" />
           </button>
@@ -118,7 +113,6 @@
           <span class="section-index">03</span>
           <div>
             <h3>{{ t('scheduler.sectionRuntime') }}</h3>
-            <p>{{ t('scheduler.runtimeDescription') }}</p>
           </div>
         </div>
 
@@ -127,13 +121,11 @@
             <n-form-item :label="t('scheduler.strategy')">
               <n-select v-model:value="formData.strategy" :options="strategyOptions" size="large" />
             </n-form-item>
-            <p class="control-help">{{ selectedStrategyDescription }}</p>
           </div>
           <div class="runtime-field">
             <n-form-item :label="t('scheduler.unattendedApproval')">
               <n-select v-model:value="formData.approval_policy" :options="approvalOptions" size="large" />
             </n-form-item>
-            <p class="control-help">{{ selectedApprovalDescription }}</p>
           </div>
         </div>
       </section>
@@ -143,13 +135,9 @@
           <span class="section-index">04</span>
           <div>
             <h3>{{ t('scheduler.sectionSchedule') }}</h3>
-            <p>{{ t('scheduler.scheduleDescription') }}</p>
           </div>
           <label class="enable-control">
-            <span>
-              <strong>{{ t('scheduler.enabled') }}</strong>
-              <small>{{ formData.enabled ? t('scheduler.enabledDescription') : t('scheduler.disabledDescription') }}</small>
-            </span>
+            <strong>{{ t('scheduler.enabled') }}</strong>
             <n-switch v-model:value="formData.enabled" />
           </label>
         </div>
@@ -164,7 +152,6 @@
             @click="formData.schedule_mode = option.value"
           >
             <strong>{{ option.label }}</strong>
-            <small>{{ option.description }}</small>
           </button>
         </div>
 
@@ -231,13 +218,11 @@
             size="large"
           />
         </n-form-item>
-        <p class="control-help schedule-help">{{ selectedScheduleDescription }}</p>
       </section>
     </n-form>
 
     <template #footer>
       <div class="modal-footer">
-        <p>{{ t('scheduler.createFooterHint') }}</p>
         <div>
           <n-button size="large" @click="show = false">{{ t('common.cancel') }}</n-button>
           <n-button
@@ -304,9 +289,9 @@ const interpreterOptions = computed(() => [
   { label: 'Shell', value: 'shell' },
   { label: 'Python', value: 'python' },
 ])
-const scheduleModeOptions = computed<Array<{ label: string; value: ScheduleMode; description: string }>>(() => [
-  { label: t('scheduler.scheduleRecurring'), value: 'recurring', description: t('scheduler.scheduleRecurringDescription') },
-  { label: t('scheduler.scheduleDate'), value: 'once', description: t('scheduler.scheduleDateDescription') },
+const scheduleModeOptions = computed<Array<{ label: string; value: ScheduleMode }>>(() => [
+  { label: t('scheduler.scheduleRecurring'), value: 'recurring' },
+  { label: t('scheduler.scheduleDate'), value: 'once' },
 ])
 const recurrenceOptions = computed<Array<{ label: string; value: RecurrenceKind }>>(() => [
   { label: t('scheduler.recurrenceDaily'), value: 'daily' },
@@ -328,23 +313,6 @@ const intervalUnitOptions = computed<Array<{ label: string; value: IntervalUnit 
   { label: t('scheduler.unitHours'), value: 'hours' },
   { label: t('scheduler.unitDays'), value: 'days' },
 ])
-const selectedStrategyDescription = computed(() => formData.value.strategy === 'react'
-  ? t('scheduler.strategyFastDescription')
-  : t('scheduler.strategyPlanDescription'))
-const selectedApprovalDescription = computed(() => ({
-  auto: t('scheduler.approvalAutoDescription'),
-  ask: t('scheduler.approvalAskDescription'),
-  always_approval: t('scheduler.approvalAlwaysDescription'),
-}[formData.value.approval_policy]))
-const selectedScheduleDescription = computed(() => {
-  if (formData.value.schedule_mode === 'once') return t('scheduler.scheduleDateDescription')
-  return ({
-    daily: t('scheduler.recurrenceDailyDescription'),
-    weekly: t('scheduler.recurrenceWeeklyDescription'),
-    interval: t('scheduler.scheduleIntervalDescription'),
-    cron: t('scheduler.scheduleCronDescription'),
-  }[formData.value.recurrence_kind])
-})
 const rules = computed<FormRules>(() => ({
   workspace_id: [requiredTextRule(t('scheduler.validateWorkspace'))],
   task_content: formData.value.task_type === 'agent' ? [requiredTextRule(t('scheduler.validateTask'))] : [],
@@ -476,10 +444,7 @@ watch(() => props.show, (visible) => {
   letter-spacing: -.035em;
 }
 
-.modal-heading p,
-.section-heading p,
-.workspace-empty p,
-.modal-footer p {
+.workspace-empty p {
   margin: 0;
   color: var(--app-text-secondary);
   font-size: 11px;
@@ -607,8 +572,7 @@ watch(() => props.show, (visible) => {
   background: var(--app-text);
 }
 
-.task-type-option.selected .option-copy strong,
-.task-type-option.selected .option-copy small {
+.task-type-option.selected .option-copy strong {
   color: var(--app-text-inverse);
 }
 
@@ -626,20 +590,10 @@ watch(() => props.show, (visible) => {
 .option-copy {
   display: grid;
   min-width: 0;
-  gap: 4px;
 }
 
 .option-copy strong {
   font-size: 12px;
-}
-
-.option-copy small {
-  overflow: hidden;
-  color: inherit;
-  font-size: 10px;
-  opacity: .78;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .selection-dot {
@@ -673,13 +627,6 @@ watch(() => props.show, (visible) => {
   margin-bottom: 0;
 }
 
-.control-help {
-  margin: 5px 1px 0;
-  color: var(--app-text-muted);
-  font-size: 9px;
-  line-height: 1.5;
-}
-
 .code-editor :deep(textarea) {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 12px;
@@ -699,23 +646,12 @@ watch(() => props.show, (visible) => {
   cursor: pointer;
 }
 
-.enable-control > span {
-  display: grid;
-  gap: 2px;
-}
-
-.enable-control strong,
-.enable-control small {
+.enable-control strong {
   white-space: nowrap;
 }
 
 .enable-control strong {
   font-size: 11px;
-}
-
-.enable-control small {
-  color: var(--app-text-secondary);
-  font-size: 9px;
 }
 
 .schedule-mode-grid {
@@ -725,8 +661,7 @@ watch(() => props.show, (visible) => {
 
 .schedule-mode-grid button {
   display: grid;
-  min-height: 64px;
-  gap: 4px;
+  min-height: 48px;
   padding: 11px 12px;
   color: var(--app-text);
   text-align: left;
@@ -749,19 +684,12 @@ watch(() => props.show, (visible) => {
   background: var(--app-text);
 }
 
-.schedule-mode-grid button.selected strong,
-.schedule-mode-grid button.selected small {
+.schedule-mode-grid button.selected strong {
   color: var(--app-text-inverse);
 }
 
 .schedule-mode-grid strong {
   font-size: 11px;
-}
-
-.schedule-mode-grid small {
-  color: inherit;
-  font-size: 9px;
-  opacity: .78;
 }
 
 .recurrence-editor {
@@ -790,19 +718,11 @@ watch(() => props.show, (visible) => {
   width: 100%;
 }
 
-.schedule-help {
-  margin-top: -3px;
-}
-
 .modal-footer {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 18px;
-}
-
-.modal-footer p {
-  max-width: 380px;
 }
 
 .modal-footer > div {

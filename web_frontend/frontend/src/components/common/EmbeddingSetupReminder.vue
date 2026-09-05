@@ -10,7 +10,6 @@
     <div class="embedding-reminder-layout">
       <div class="embedding-reminder">
         <p>{{ t('embeddingSetup.description') }}</p>
-        <small>{{ t('embeddingSetup.fallback') }}</small>
       </div>
     </div>
     <template #footer>
@@ -68,5 +67,4 @@ async function configure() {
 .embedding-reminder-layout { display: grid; grid-template-columns: minmax(0, 1fr); }
 .embedding-reminder { display: grid; gap: 12px; }
 .embedding-reminder p { margin: 0; color: var(--app-text); font-size: 14px; line-height: 1.7; }
-.embedding-reminder small { color: var(--app-text-muted); font-size: 11px; line-height: 1.6; }
 </style>

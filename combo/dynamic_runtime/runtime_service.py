@@ -32,6 +32,7 @@ from combo.dynamic_runtime.policy_repositories import UserRuntimePolicyStore
 from combo.dynamic_runtime.repositories import ConversationStore, RuntimeInstanceStore
 from combo.dynamic_runtime.run_control import RuntimeRunControl, RuntimeRunControlRegistry
 from combo.dynamic_runtime.services import DynamicRuntimeServiceSet
+from combo.runtime_defaults import DEFAULT_BUILTIN_WORKSPACE_ROOT
 from combo.dynamic_runtime.snapshot_tool_registry import SnapshotToolRegistryLease
 from combo.runtime_kernel.capability_state import bind_capability_snapshot
 from combo.runtime_kernel.persistence import delete_checkpoint_thread
@@ -84,7 +85,7 @@ class RuntimeLaunchContext(BaseModel):
     locale: RuntimeLocale = "zh-CN"
     capability_instructions: str = ""
     turn_directives: tuple[str, ...] = ()
-    workspace_root_alias: str = "/workdir"
+    workspace_root_alias: str = DEFAULT_BUILTIN_WORKSPACE_ROOT
     allow_external_paths: bool = False
     workspace_mounts: tuple[dict[str, Any], ...] = ()
     attachments: tuple[dict[str, Any], ...] = ()

@@ -3,12 +3,15 @@ import { markdownApi } from '@/api/markdown'
 import { runtimeLocale, translate } from '@/i18n'
 
 const handlerRoots = new WeakSet<EventTarget>()
+const interactionNodes = new WeakSet<HTMLElement>()
 const sources = new WeakMap<HTMLElement, string>()
 const repairRequests = new Map<string, Promise<string | null>>()
 let configuredTheme = ''
 let themeObserver: MutationObserver | null = null
 let renderQueue: Promise<void> = Promise.resolve()
 let preview: MermaidPreview | null = null
+let activeDiagram: HTMLElement | null = null
+let outsideInteractionReady = false
 
 const ASPECT_WIDE = 1.6
 const ASPECT_TALL = 0.8
@@ -41,6 +44,10 @@ function ensureControls(root: ParentNode): void {
   if (handlerRoots.has(eventRoot)) return
   eventRoot.addEventListener('click', handleControlClick)
   handlerRoots.add(eventRoot)
+  if (!outsideInteractionReady) {
+    document.addEventListener('pointerdown', handleOutsideDiagramPointerDown)
+    outsideInteractionReady = true
+  }
 }
 
 function handleControlClick(event: Event): void {
@@ -143,6 +150,51 @@ function finishDiagram(node: HTMLElement): void {
   node.classList.remove('mermaid-render-failed', 'mermaid-repairing')
   classifyDiagram(node)
   ensureExpandButton(node)
+  ensureDiagramInteraction(node)
+}
+
+function ensureDiagramInteraction(node: HTMLElement): void {
+  if (interactionNodes.has(node)) return
+  interactionNodes.add(node)
+  node.tabIndex = 0
+  node.addEventListener('click', (event) => {
+    const target = event.target
+    if (target instanceof Element && target.closest('[data-mermaid-expand="true"]')) return
+    activateDiagram(node)
+  })
+  node.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault()
+      activateDiagram(node)
+    } else if (event.key === 'Escape') {
+      deactivateDiagram(node)
+      node.blur()
+    }
+  })
+  node.addEventListener('focusout', () => {
+    window.setTimeout(() => {
+      if (!node.contains(document.activeElement)) deactivateDiagram(node)
+    }, 0)
+  })
+}
+
+function activateDiagram(node: HTMLElement): void {
+  if (activeDiagram && activeDiagram !== node) deactivateDiagram(activeDiagram)
+  activeDiagram = node
+  node.dataset.mermaidInteractive = 'true'
+  node.focus({ preventScroll: true })
+}
+
+function deactivateDiagram(node: HTMLElement): void {
+  if (activeDiagram === node) activeDiagram = null
+  delete node.dataset.mermaidInteractive
+}
+
+function handleOutsideDiagramPointerDown(event: PointerEvent): void {
+  if (!activeDiagram) return
+  const target = event.target
+  if (target instanceof Node && activeDiagram.contains(target)) return
+  deactivateDiagram(activeDiagram)
 }
 
 function classifyDiagram(node: HTMLElement): void {
