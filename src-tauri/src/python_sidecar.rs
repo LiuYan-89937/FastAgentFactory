@@ -8,6 +8,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Manager};
 use wait_timeout::ChildExt;
 
+use crate::computer_host::ComputerHostEndpoint;
 use crate::user_environment;
 
 #[cfg(all(windows, not(debug_assertions)))]
@@ -30,7 +31,10 @@ pub struct PythonSidecar {
 
 impl PythonSidecar {
     /// Spawn the Python backend process.
-    pub fn spawn(app: &AppHandle) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn spawn(
+        app: &AppHandle,
+        computer_host: &ComputerHostEndpoint,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
         let port = Self::allocate_loopback_port()?;
         let port_str = port.to_string();
         let resource_dir = app.path().resource_dir()?;
@@ -71,6 +75,8 @@ impl PythonSidecar {
             .env("COMBO_PROJECT_ROOT", &project_root)
             .env("COMBO_DATA_ROOT", &data_root)
             .env("COMBO_PARENT_STDIN_WATCHDOG", "1")
+            .env("COMBO_COMPUTER_HOST_ADDRESS", &computer_host.address)
+            .env("COMBO_COMPUTER_HOST_TOKEN", &computer_host.token)
             .env("PYTHONDONTWRITEBYTECODE", "1")
             .env("PYTHONUTF8", "1")
             .env("PYTHONUNBUFFERED", "1")

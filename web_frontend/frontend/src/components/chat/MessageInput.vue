@@ -317,6 +317,7 @@ import { useFileCapabilities } from '@/composables/useFileCapabilities'
 import { MAX_RUNTIME_ATTACHMENTS, extensionFromMimeType, pastedImageFiles, runtimeFileAttachmentFromFile } from '@/utils/attachments'
 import type { ContextReferenceInput, QueuedMessageView, RuntimeAttachmentInput } from '@/types/protocol'
 import { useContextReferenceStore } from '@/stores/contextReferences'
+import { useComputerPermissionsStore } from '@/stores/computerPermissions'
 import type { ApprovalMode, ExecutionPreference } from '@/api/dynamicRuntime'
 import {
   clearConversationDraft,
@@ -328,6 +329,8 @@ import { REASONING_INTENSITY_DEFAULT } from '@/utils/reasoning'
 const { t } = useI18n()
 const messageApi = useMessage()
 const referenceStore = useContextReferenceStore()
+const computerPermissions = useComputerPermissionsStore()
+const checkingPermissions = ref(false)
 const {
   capabilities: fileCapabilities,
   attachmentExtensions,
@@ -462,7 +465,7 @@ const attachmentsCanFormMessage = computed(() => (
 const hasMessageContent = computed(() => (
   inputText.value.trim().length > 0 || attachmentsCanFormMessage.value
 ))
-const canSend = computed(() => hasMessageContent.value && !props.disabled)
+const canSend = computed(() => hasMessageContent.value && !props.disabled && !checkingPermissions.value)
 const primaryAction = computed<'send' | 'cancel'>(() => (
   props.isRunning && !hasDraft.value ? 'cancel' : 'send'
 ))
@@ -541,8 +544,17 @@ async function handlePaste(e: ClipboardEvent) {
   }
 }
 
-function handleSend() {
+async function handleSend() {
   if (!canSend.value) return
+  checkingPermissions.value = true
+  let permitted = false
+  try {
+    permitted = await computerPermissions.check()
+  } finally {
+    checkingPermissions.value = false
+  }
+  // Keep the draft and attachments intact when permission has not been granted.
+  if (!permitted || !canSend.value) return
 
   const message = inputText.value.trim()
   emit('send', message, props.attachmentsEnabled ? [...contextReferences.value, ...attachments.value] : [...contextReferences.value])

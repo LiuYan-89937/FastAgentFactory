@@ -101,6 +101,10 @@ BUILTIN_TOOL_COPY: dict[str, BuiltinToolCopy] = {
     "browser_upload": _copy("通过文件输入控件上传用户已授权的当前工作区文件。该操作需要审批。", "Upload user-authorized files from the current workspace through a file input. This action requires approval."),
     "browser_tabs": _copy("列出当前隔离浏览器上下文中的所有页面。", "List all pages in the current isolated browser context."),
     "browser_close": _copy("关闭一个浏览器页面，或关闭当前 Agent 会话的整个隔离浏览器上下文。", "Close one browser page or the entire isolated browser context for the current Agent session."),
+    "computer_use": _copy(
+        "通过独立的系统级视觉 Computer Use 运行时操作当前 macOS 或 Windows 桌面。用于原生桌面应用和跨应用操作；它与 browser_* 内置工具完全独立。只提供一个完整、简洁的桌面任务目标，内部高速视觉闭环自行完成鼠标和键盘操作。",
+        "Operate the current macOS or Windows desktop through the independent system-level visual Computer Use runtime. Use it for native desktop apps and cross-application interaction. It is completely separate from browser_* built-ins. Provide one concise complete desktop goal; the internal high-speed vision loop handles mouse and keyboard actions.",
+    ),
     "generate_image": _copy("使用模型池中配置的默认生图模型生成原创视觉素材，并保存到当前会话工作区。", "Generate original visual assets with the default image model configured in the model pool and save them in the current conversation workspace."),
 }
 

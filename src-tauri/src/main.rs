@@ -1,6 +1,10 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod computer_accessibility;
+mod computer_applications;
+mod computer_host;
+mod computer_permissions;
 mod desktop_file_actions;
 mod error_reporting;
 mod git_repository;
@@ -8,6 +12,8 @@ mod github_account;
 mod python_sidecar;
 mod user_environment;
 
+use computer_host::ComputerHost;
+use computer_permissions::{computer_permissions, request_computer_permission};
 use desktop_file_actions::{reveal_in_file_manager, save_file_as, select_directory};
 use error_reporting::report_error;
 use git_repository::{
@@ -29,6 +35,7 @@ use tauri::Manager;
 /// Application state holding the Python backend sidecar handle.
 struct AppState {
     sidecar: Mutex<Option<PythonSidecar>>,
+    computer_host: Mutex<Option<ComputerHost>>,
 }
 
 /// Command to check if the Python backend is running.
@@ -87,7 +94,14 @@ fn restart_backend(app: tauri::AppHandle, state: tauri::State<AppState>) -> Resu
             running.shutdown();
         }
     }
-    let restarted = PythonSidecar::spawn(&app).map_err(|error| error.to_string())?;
+    let endpoint = state
+        .computer_host
+        .lock()
+        .unwrap()
+        .as_ref()
+        .ok_or_else(|| "native computer host is not initialized".to_string())?
+        .endpoint();
+    let restarted = PythonSidecar::spawn(&app, &endpoint).map_err(|error| error.to_string())?;
     *state.sidecar.lock().unwrap() = Some(restarted);
     Ok(())
 }
@@ -142,14 +156,20 @@ fn main() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(AppState {
             sidecar: Mutex::new(None),
+            computer_host: Mutex::new(None),
         })
         .setup(|app| {
-            // Launch Python backend as a sidecar process
             let app_handle = app.handle().clone();
-            let sidecar = PythonSidecar::spawn(&app_handle)?;
+            let state = app.state::<AppState>();
+            let computer_host = ComputerHost::start(app_handle.clone())?;
+            let endpoint = computer_host.endpoint();
+            *state.computer_host.lock().unwrap() = Some(computer_host);
+
+            // Launch Python backend only after the native computer host can
+            // dispatch platform input operations through Tauri's main thread.
+            let sidecar = PythonSidecar::spawn(&app_handle, &endpoint)?;
 
             // Store the sidecar handle in app state
-            let state = app.state::<AppState>();
             *state.sidecar.lock().unwrap() = Some(sidecar);
 
             Ok(())
@@ -173,6 +193,8 @@ fn main() {
             restart_backend,
             shutdown_backend,
             desktop_platform,
+            computer_permissions,
+            request_computer_permission,
             report_error,
             reveal_in_file_manager,
             save_file_as,

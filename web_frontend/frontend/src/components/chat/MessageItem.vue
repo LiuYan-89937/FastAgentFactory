@@ -287,7 +287,7 @@ function formatTime(timestamp: string): string {
   justify-content: flex-start;
 }
 
-.message-item:hover {
+:root[data-theme='dark'] .message-item:hover {
   background-color: color-mix(in srgb, var(--app-text) 2.5%, transparent);
 }
 

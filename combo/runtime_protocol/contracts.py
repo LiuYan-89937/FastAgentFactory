@@ -21,6 +21,7 @@ RuntimeRole = Literal["main", "temporary"]
 ModelOperationKind = Literal[
     "main_turn",
     "temporary_turn",
+    "computer_use",
     "context_compression",
     "tool_output_compression",
     "memory_extraction",

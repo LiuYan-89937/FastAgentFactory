@@ -8,6 +8,9 @@
         <strong>{{ t('chat.runtimeErrorTitle') }}</strong>
         <span>{{ part.message }}</span>
       </div>
+    </div>
+
+    <div class="runtime-error-report-action">
       <ErrorReportButton
         :summary="part.message"
         :error-code="errorCode"
@@ -105,6 +108,13 @@ function stringValue(value: unknown): string {
   color: var(--app-text-muted);
   font-size: 12px;
   line-height: 1.45;
+}
+
+.runtime-error-report-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 11px 9px;
 }
 
 .runtime-error-details {

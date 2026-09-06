@@ -1,7 +1,13 @@
 import { computed } from 'vue'
 import { useI18n } from '@/composables/useI18n'
 import { useRuntimeStore } from '@/stores/runtime'
-import type { ToolActivity, TranscriptItem } from '@/types/protocol'
+import type {
+  ComputerUseAccessibilityView,
+  ComputerUseFrameView,
+  ComputerUseTargetView,
+  ToolActivity,
+  TranscriptItem,
+} from '@/types/protocol'
 import { isToolActivityActive, isToolActivityPendingApproval } from '@/utils/toolActivityState'
 import { conversationVisibleParts } from '@/utils/toolPresentation'
 
@@ -13,6 +19,11 @@ export interface ConversationActivitySummary {
   role: 'assistant' | 'system'
   status: string
   requestId: string
+  kind: 'default' | 'computer_use'
+  startedAt: string | null
+  frame: ComputerUseFrameView | null
+  target: ComputerUseTargetView | null
+  accessibility: ComputerUseAccessibilityView | null
 }
 
 export function useConversationMessageProjection() {
@@ -90,6 +101,7 @@ export function useConversationMessageProjection() {
     const displayStatus = activeRuntimeDisplayStatus(
       runtimeStore.runtimeActivity,
       runtimeStore.contextActivity,
+      runtimeStore.computerUseActivity,
       activeTurn.requestId,
       t,
       toolActivityHint.value,
@@ -99,6 +111,11 @@ export function useConversationMessageProjection() {
       role: displayStatus.role,
       status: String(runtimeStore.runStatus || 'running'),
       requestId: String(activeTurn.requestId || ''),
+      kind: displayStatus.kind,
+      startedAt: displayStatus.startedAt,
+      frame: displayStatus.frame,
+      target: displayStatus.target,
+      accessibility: displayStatus.accessibility,
     }
   })
   const activeStreamContentKey = computed(() => {
@@ -151,17 +168,41 @@ export function useConversationMessageProjection() {
 function activeRuntimeDisplayStatus(
   runtimeActivity: ReturnType<typeof useRuntimeStore>['runtimeActivity'],
   contextActivity: ReturnType<typeof useRuntimeStore>['contextActivity'],
+  computerUseActivity: ReturnType<typeof useRuntimeStore>['computerUseActivity'],
   activeRequestId: string | null,
   t: ReturnType<typeof useI18n>['t'],
   toolActivityHint: string,
-): { text: string; role: 'assistant' | 'system' } {
+): Omit<ConversationActivitySummary, 'status' | 'requestId'> {
+  if (
+    activeRequestId
+    && computerUseActivity.requestId === activeRequestId
+    && computerUseActivity.status === 'running'
+  ) {
+    return {
+      text: computerUseActivityText(computerUseActivity, t),
+      role: 'assistant',
+      kind: 'computer_use',
+      startedAt: computerUseActivity.startedAt || null,
+      frame: computerUseActivity.frame || null,
+      target: computerUseActivity.target || null,
+      accessibility: computerUseActivity.accessibility || null,
+    }
+  }
   if (
     activeRequestId
     && contextActivity.requestId === activeRequestId
     && contextActivity.status === 'running'
     && contextActivity.eventType === 'context_compression_started'
   ) {
-    return { text: t('context.context_compression_started'), role: 'system' }
+    return {
+      text: t('context.context_compression_started'),
+      role: 'system',
+      kind: 'default',
+      startedAt: null,
+      frame: null,
+      target: null,
+      accessibility: null,
+    }
   }
   const activitySummary = String(runtimeActivity.payload?.summary || '').trim()
   if (
@@ -170,9 +211,45 @@ function activeRuntimeDisplayStatus(
     && runtimeActivity.status === 'active'
     && activitySummary
   ) {
-    return { text: activitySummary, role: 'assistant' }
+    return {
+      text: activitySummary,
+      role: 'assistant',
+      kind: 'default',
+      startedAt: null,
+      frame: null,
+      target: null,
+      accessibility: null,
+    }
   }
-  return { text: toolActivityHint || t('roles.assistantThinking'), role: 'assistant' }
+  return {
+    text: toolActivityHint || t('roles.assistantThinking'),
+    role: 'assistant',
+    kind: 'default',
+    startedAt: null,
+    frame: null,
+    target: null,
+    accessibility: null,
+  }
+}
+
+function computerUseActivityText(
+  activity: ReturnType<typeof useRuntimeStore>['computerUseActivity'],
+  t: ReturnType<typeof useI18n>['t'],
+): string {
+  const phaseKey: Record<string, string> = {
+    preparing: 'conversation.computerUse.preparing',
+    waiting: 'conversation.computerUse.waiting',
+    starting: 'conversation.computerUse.starting',
+    model_setup: 'conversation.computerUse.modelSetup',
+    applications: 'conversation.computerUse.applications',
+    attaching: 'conversation.computerUse.attaching',
+    observing: 'conversation.computerUse.observing',
+    analyzing: 'conversation.computerUse.analyzing',
+    acting: 'conversation.computerUse.acting',
+  }
+  const phase = t((phaseKey[String(activity.phase || '')] || 'conversation.computerUse.running') as any)
+  const step = activity.step ? t('conversation.computerUse.step', { step: activity.step }) : ''
+  return [t('conversation.computerUse.label'), phase, step].filter(Boolean).join(' · ')
 }
 
 function assistantProjectionId(requestId: string): string {

@@ -45,6 +45,7 @@ from combo.runtime_protocol import (
 )
 from combo.tooling.output_store import ToolOutputStore
 from combo.tooling.builtins.browser.runtime import BrowserRuntime
+from combo.computer_use import ComputerUseCoordinator
 from combo.tooling.builtins.process.manager import ProcessManager, ProcessRuntimeResource
 from combo.tooling.builtins.process.runtime import resolve_shell_runtime
 from combo.tooling.skillhub.service import SkillHubService
@@ -396,6 +397,7 @@ def runtime_resource_factory(
     resource_name: str,
     *,
     browser_runtime: BrowserRuntime,
+    computer_use_runtime: ComputerUseCoordinator,
     capability_catalog: CapabilityCatalogRuntime,
     capability_invocation_runtime: CapabilityInvocationRuntime,
     mcp_content_runtime: MCPContentRuntime,
@@ -417,6 +419,7 @@ def runtime_resource_factory(
         "process_runtime",
         "runtime_identity",
         "browser_runtime",
+        "computer_use_runtime",
         "capability_catalog",
         "capability_invocation_runtime",
         "memory_store",
@@ -440,6 +443,8 @@ def runtime_resource_factory(
                 value=browser_runtime,
                 release_callback=release_borrowed_runtime_resource,
             )
+        if resource_name == "computer_use_runtime":
+            return ProjectedRuntimeResource(value=computer_use_runtime.for_runtime(instance))
         if resource_name == "capability_catalog":
             return ProjectedRuntimeResource(value=capability_catalog)
         if resource_name == "capability_invocation_runtime":

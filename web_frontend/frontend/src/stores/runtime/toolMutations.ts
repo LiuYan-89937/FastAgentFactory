@@ -6,10 +6,17 @@ import {
 } from './conversationMutations'
 import { isBackgroundEvent } from './eventUtils'
 import { toolPayloadValue } from './toolPayload'
+import {
+  applyComputerUseApprovalRequest,
+  applyComputerUseLifecycleEvent,
+  finalizeComputerUseForRequest,
+  resolveComputerUseApproval,
+} from './computerUseMutations'
 
 type ToolMutationState = Pick<
   RuntimeViewState,
   | 'activeRequestId'
+  | 'computerUseActivity'
   | 'conversationTurns'
   | 'modelStreams'
   | 'pendingInterrupt'
@@ -24,6 +31,14 @@ export function applyToolLifecycleEvent(
   status: ToolActivity['status'],
 ) {
   if (isBackgroundEvent(event, state.activeRequestId)) return
+  const computerUseStatus = status === 'approval'
+    ? 'approval'
+    : status === 'failed' && toolEventWasUserCancelled(event)
+      ? 'cancelled'
+      : status === 'completed' || status === 'failed' || status === 'cancelled'
+        ? status
+        : 'running'
+  if (applyComputerUseLifecycleEvent(state, event, computerUseStatus)) return
   const toolCallId = toolPayloadValue(event.payload || {}, ['tool_call_id', 'toolCallId'])
   const existing = state.tools.find((tool) => toolCallId && tool.toolCallId === String(toolCallId))
   const nextStatus = status === 'failed' && (
@@ -48,6 +63,7 @@ export function applyToolApprovalRequested(state: ToolMutationState, event: Runt
       ...event,
       payload: { ...(event.payload || {}), ...req },
     } satisfies RuntimeFrontendEvent
+    if (applyComputerUseApprovalRequest(state, approvalEvent, req)) return
     const activity = upsertToolActivityFromEvent(state, approvalEvent, 'approval')
     if (activity) {
       activity.approvalState = 'pending'
@@ -60,6 +76,7 @@ export function applyToolApprovalResolved(state: ToolMutationState, event: Runti
   if (isBackgroundEvent(event, state.activeRequestId)) return
   const approved = event.payload?.approved
   const toolCallIds = approvalToolCallIds(event.payload)
+  resolveComputerUseApproval(state, event, toolCallIds)
   state.pendingInterrupt = null
   if (state.runStatus === 'interrupted') {
     state.runStatus = 'running'
@@ -101,6 +118,7 @@ export function finalizeToolActivitiesForRequest(
 ) {
   if (!requestId) return
   const terminalReason = String(reason || '').trim()
+  finalizeComputerUseForRequest(state, requestId, timestamp, terminalStatus, terminalReason)
   state.tools
     .filter((tool) => tool.requestId === requestId && isToolActivityInFlight(tool))
     .forEach((tool) => {

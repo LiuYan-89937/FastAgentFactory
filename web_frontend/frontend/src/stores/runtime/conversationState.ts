@@ -8,6 +8,7 @@ type ConversationScopeSource = Pick<
   | 'tools'
   | 'currentPlan'
   | 'runtimeActivity'
+  | 'computerUseActivity'
   | 'contextActivity'
   | 'contextWindow'
   | 'memoryActivity'
@@ -42,6 +43,7 @@ export function buildConversationScopeState(source: ConversationScopeSource): Co
       ...source.runtimeActivity,
       payload: { ...(source.runtimeActivity.payload || {}) },
     },
+    computerUseActivity: { ...source.computerUseActivity },
     contextActivity: {
       ...source.contextActivity,
       payload: { ...(source.contextActivity.payload || {}) },
@@ -91,6 +93,9 @@ export function normalizeConversationScopeState(saved: ConversationScopeState): 
       : null,
     runtimeActivity: saved.runtimeActivity
       ? { ...saved.runtimeActivity, payload: { ...(saved.runtimeActivity.payload || {}) } }
+      : { status: 'idle' },
+    computerUseActivity: saved.computerUseActivity
+      ? { ...saved.computerUseActivity }
       : { status: 'idle' },
     contextActivity: saved.contextActivity
       ? { ...saved.contextActivity, payload: { ...(saved.contextActivity.payload || {}) } }

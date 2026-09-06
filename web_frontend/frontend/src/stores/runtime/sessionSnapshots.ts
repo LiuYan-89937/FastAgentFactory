@@ -4,12 +4,17 @@ import type {
   RuntimeFrontendEvent,
   RuntimeMode,
   RunStatus,
+  ReasoningMessagePart,
   RuntimePlanView,
   ToolActivity,
   TranscriptItem,
 } from '@/types/protocol'
 import { agentPackageConversationScope } from './scopes'
 import { isPlanCapsuleDismissed } from '@/utils/planCapsuleDismissals'
+import {
+  isComputerUseToolActivity,
+  withoutComputerUseParts,
+} from '@/utils/computerUse'
 
 export interface AgentPackageSessionSnapshotView {
   sessionPackageId: string | null
@@ -68,6 +73,7 @@ function toolsFromTurns(turns: ConversationTurn[]): ToolActivity[] {
   const byKey = new Map<string, ToolActivity>()
   turns.forEach((turn) => {
     turn.tools.forEach((tool) => {
+      if (isComputerUseToolActivity(tool)) return
       const key = String(tool.activityKey || tool.toolCallId || '')
       if (key) byKey.set(key, { ...tool, payload: { ...(tool.payload || {}) } })
     })
@@ -123,7 +129,9 @@ function conversationFromTurns(rawTurns: any[], context: TurnRestoreContext) {
     const createdAt = String(turn.created_at || context.fallbackTimestamp || new Date().toISOString())
     const updatedAt = String(turn.updated_at || createdAt)
     const turnMessages = Array.isArray(turn.messages) ? turn.messages : []
-    const toolActivities = Array.isArray(turn.tool_activities) ? turn.tool_activities : []
+    const toolActivities = Array.isArray(turn.tool_activities)
+      ? turn.tool_activities.filter((activity: ToolActivity) => !isComputerUseToolActivity(activity))
+      : []
     if (turnMessages.length > 0) {
       restoreTurnMessages({
         transcript,
@@ -219,14 +227,14 @@ function transcriptItemFromPartMessage(
 ): TranscriptItem | null {
   if (!rawMessage || typeof rawMessage !== 'object') return null
   const role = rawMessage.role === 'assistant' ? 'assistant' : rawMessage.role === 'system' ? 'system' : 'user'
-  const parts = Array.isArray(rawMessage.parts) ? rawMessage.parts : []
+  const parts = withoutComputerUseParts(Array.isArray(rawMessage.parts) ? rawMessage.parts : [])
   if (parts.length === 0) return null
   const timestamp = String(rawMessage.timestamp || options.fallbackTimestamp || new Date().toISOString())
   const content = parts
     .filter((part: any) => part?.type === 'text')
     .map((part: any) => String(part.text || ''))
     .join('')
-  const reasoning = parts.find((part: any) => part?.type === 'reasoning')
+  const reasoning = parts.find((part): part is ReasoningMessagePart => part.type === 'reasoning')
   const attachments = parts
     .filter((part: any) => part?.type === 'attachment' && part.attachment)
     .map((part: any) => part.attachment)

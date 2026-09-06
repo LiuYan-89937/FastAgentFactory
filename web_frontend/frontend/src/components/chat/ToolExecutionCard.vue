@@ -16,23 +16,23 @@
       </span>
       <span class="tool-side">
         <span v-if="durationLabel" class="tool-duration">{{ durationLabel }}</span>
+        <span v-if="state === 'failed'" class="tool-report-action" @click.stop @keydown.stop>
+          <ErrorReportButton
+            :summary="errorSummary"
+            :error-code="errorMetadata.code"
+            :request-id="errorMetadata.requestId"
+            :diagnostic-ref="errorMetadata.diagnosticRef"
+            :context="{ tool_name: part.toolName, call_id: part.callId || '' }"
+            size="tiny"
+            type="error"
+          />
+        </span>
         <span v-if="showStatusLabel" class="tool-status">{{ statusLabel }}</span>
         <span class="summary-chevron" aria-hidden="true">⌄</span>
       </span>
     </summary>
 
     <div class="tool-body">
-      <div v-if="state === 'failed'" class="tool-error-actions">
-        <ErrorReportButton
-          :summary="errorSummary"
-          :error-code="errorMetadata.code"
-          :request-id="errorMetadata.requestId"
-          :diagnostic-ref="errorMetadata.diagnosticRef"
-          :context="{ tool_name: part.toolName, call_id: part.callId || '' }"
-          size="tiny"
-          type="error"
-        />
-      </div>
       <div v-if="resultFacts.length" class="tool-facts">
         <span v-for="fact in resultFacts" :key="fact">{{ fact }}</span>
       </div>
@@ -499,10 +499,9 @@ details[open] > summary .summary-chevron {
   background: var(--app-surface);
 }
 
-.tool-error-actions {
-  display: flex;
-  justify-content: flex-end;
-  padding: 6px var(--app-space-md) 0;
+.tool-report-action {
+  display: inline-flex;
+  align-items: center;
 }
 
 .tool-facts,

@@ -101,6 +101,7 @@ import {
   finalizeToolActivitiesForRequest,
   applyToolLifecycleEvent,
 } from './runtime/toolMutations'
+import { clearComputerUseForRequest } from './runtime/computerUseMutations'
 import {
   detectBrowserLocale,
   localeStorageKey,
@@ -144,6 +145,7 @@ export const useRuntimeStore = defineStore('runtime', {
     timeline: [],
     debugEvents: [],
     runtimeActivity: { status: 'idle' },
+    computerUseActivity: { status: 'idle' },
     contextActivity: { status: 'idle' },
     contextWindow: null,
     memoryActivity: { status: 'idle' },
@@ -656,6 +658,7 @@ export const useRuntimeStore = defineStore('runtime', {
       this.tools = []
       this.currentPlan = null
       this.runtimeActivity = { status: 'idle' }
+      this.computerUseActivity = { status: 'idle' }
       const turn = ensureConversationTurn(this, event.request_id || null, event.timestamp)
       turn.status = 'running'
       turn.startedAt = event.timestamp
@@ -711,6 +714,7 @@ export const useRuntimeStore = defineStore('runtime', {
       if (!this.activeRequestId || this.activeRequestId === requestId) {
         this.activeRequestId = null
       }
+      clearComputerUseForRequest(this, requestId)
       this.pendingInterrupt = null
 
       // 同步 agent session
@@ -764,6 +768,7 @@ export const useRuntimeStore = defineStore('runtime', {
       if (!this.activeRequestId || this.activeRequestId === requestId) {
         this.activeRequestId = null
       }
+      clearComputerUseForRequest(this, requestId)
     },
 
     _handleRunFailed(event: RuntimeFrontendEvent) {
@@ -815,6 +820,7 @@ export const useRuntimeStore = defineStore('runtime', {
       if (!this.activeRequestId || this.activeRequestId === requestId) {
         this.activeRequestId = null
       }
+      clearComputerUseForRequest(this, requestId)
     },
 
     _syncAgentSessionFromRunEvent(event: RuntimeFrontendEvent) {
@@ -1216,6 +1222,7 @@ export const useRuntimeStore = defineStore('runtime', {
       if (activate) this.currentMode = 'agent_package'
       this.currentPlan = snapshot.currentPlan
       this.runtimeActivity = { status: 'idle' }
+      this.computerUseActivity = { status: 'idle' }
       this.contextActivity = { status: 'idle' }
       this.contextWindow = snapshot.contextWindow
       this.memoryActivity = { status: 'idle' }
@@ -1466,6 +1473,7 @@ export const useRuntimeStore = defineStore('runtime', {
       this.tools = restored.tools
       this.currentPlan = restored.currentPlan
       this.runtimeActivity = restored.runtimeActivity
+      this.computerUseActivity = restored.computerUseActivity
       this.contextActivity = restored.contextActivity
       this.contextWindow = restored.contextWindow
       this.memoryActivity = restored.memoryActivity
@@ -1614,6 +1622,7 @@ export const useRuntimeStore = defineStore('runtime', {
       this.tools = []
       this.currentPlan = null
       this.runtimeActivity = { status: 'idle' }
+      this.computerUseActivity = { status: 'idle' }
       this.contextActivity = { status: 'idle' }
       this.contextWindow = null
       this.memoryActivity = { status: 'idle' }

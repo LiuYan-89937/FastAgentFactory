@@ -1852,14 +1852,20 @@ def _frontend_message_part(
         }
     if kind == "tool_result":
         call_id = str(value.get("tool_call_id") or "").strip()
+        error_code = str(value.get("error_code") or "").strip()
+        output = value.get("output")
+        error = None
+        if error_code:
+            details = dict(output) if isinstance(output, dict) else {}
+            error = {**details, "code": error_code}
         return {
             "id": part_id,
             "type": kind,
             "toolName": (tool_display_names or {}).get(call_id) or value.get("model_alias") or value.get("capability_id") or "tool_call",
             "callId": value.get("tool_call_id"),
-            "output": value.get("output"),
-            "error": value.get("error_code"),
-            "status": "failed" if value.get("error_code") else value.get("status") or "completed",
+            "output": output,
+            "error": error,
+            "status": "failed" if error_code else value.get("status") or "completed",
             "startedAt": value.get("started_at"),
             "completedAt": value.get("completed_at"),
             "updatedAt": value.get("completed_at"),

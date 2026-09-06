@@ -24,6 +24,7 @@ RuntimeResourceName = Literal[
     "process_runtime",
     "runtime_identity",
     "browser_runtime",
+    "computer_use_runtime",
     "capability_catalog",
     "capability_invocation_runtime",
     "memory_store",

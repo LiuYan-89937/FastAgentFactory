@@ -102,6 +102,8 @@ from combo.dynamic_runtime.runtime_infrastructure import (
     runtime_resource_factory,
 )
 from combo.model_pool import ModelPoolStore
+from combo.dynamic_runtime.model_service import RuntimeModelResolver
+from combo.computer_use import ComputerUseCoordinator
 from combo.paths import combo_data_path, project_root
 from combo.resource_system import ResourceDescriptor, ResourceIdentity, ResourceStore
 from combo.runtime_protocol import (
@@ -329,6 +331,9 @@ class RuntimeBackend:
             self.frontend_events.bind_scheduler_run_resolver(self._scheduler_run_for_runtime)
             self.frontend_events.bind_scheduler_event_sink(self._record_scheduler_runtime_event)
         except BaseException:
+            computer_use_runtime = getattr(self, "computer_use_runtime", None)
+            if computer_use_runtime is not None:
+                computer_use_runtime.close()
             self.browser_runtime.shutdown()
             self.process_resources.close()
             self.filesystem_resources.close()
@@ -1970,6 +1975,7 @@ class RuntimeBackend:
                 failures.append(exc)
         for close_operation in (
             self.application.close,
+            self.computer_use_runtime.close,
             self.browser_runtime.shutdown,
             self.process_resources.close,
             self.filesystem_resources.close,
@@ -2032,6 +2038,7 @@ class RuntimeBackend:
                         stores.conversations,
                         name,
                         browser_runtime=self.browser_runtime,
+                        computer_use_runtime=self.computer_use_runtime,
                         capability_catalog=capability_catalog,
                         capability_invocation_runtime=capability_invocation_runtime,
                         mcp_content_runtime=MCPContentRuntime(self.mcp_runtime, self.mcp_gateway),
@@ -2053,6 +2060,7 @@ class RuntimeBackend:
                         "process_runtime",
                         "runtime_identity",
                         "browser_runtime",
+                        "computer_use_runtime",
                         "capability_catalog",
                         "capability_invocation_runtime",
                         "memory_store",
@@ -2125,6 +2133,9 @@ class RuntimeBackend:
             self._synchronize_skill_capabilities(stores, adapters)
 
         model_pool_store = ModelPoolStore()
+        self.computer_use_runtime = ComputerUseCoordinator.from_environment(
+            model_resolver=RuntimeModelResolver(model_pool_store)
+        )
         self.delegated_model_selector = DelegatedTaskModelSelector(model_pool_store)
         self._advance_startup_phase("capability_bootstrap")
         application = DynamicRuntimeApplication.open(

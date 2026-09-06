@@ -12,6 +12,7 @@
             <AppContent v-if="startupStore.ready" />
             <SelectionReferenceMenu v-if="startupStore.ready" />
             <AppUpdateDialog />
+            <ComputerPermissionsDialog />
             <div
               v-if="!startupStore.ready && startupStore.status !== 'failed'"
               class="startup-animation"
@@ -81,6 +82,7 @@ import { createThemeOverrides } from '@/theme/naiveTheme'
 import AppContent from '@/layouts/AppContent.vue'
 import SelectionReferenceMenu from '@/components/chat/SelectionReferenceMenu.vue'
 import AppUpdateDialog from '@/components/common/AppUpdateDialog.vue'
+import ComputerPermissionsDialog from '@/components/common/ComputerPermissionsDialog.vue'
 import ErrorReportButton from '@/components/common/ErrorReportButton.vue'
 import ComboFrameAnimation from '@/components/brand/ComboFrameAnimation.vue'
 

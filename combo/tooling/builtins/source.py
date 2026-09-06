@@ -15,6 +15,7 @@ from combo.dynamic_runtime.capability_blob_store import CapabilityBlobStore
 from combo.dynamic_runtime.content_media import media_type_for_path
 from combo.runtime_protocol import CapabilityContent, CapabilityDraft
 from combo.tooling.builtins.browser.specs import get_browser_tool_specs
+from combo.tooling.builtins.computer_use.specs import get_computer_use_tool_specs
 from combo.tooling.builtins.ask_usr.specs import get_ask_usr_tool_specs
 from combo.tooling.builtins.capability.specs import get_capability_tool_specs
 from combo.tooling.builtins.capability_invoke.specs import get_capability_invoke_tool_specs
@@ -79,6 +80,7 @@ class BuiltinToolCapabilitySource:
             *get_mcp_installer_tool_specs(),
             *get_skill_tool_specs(),
             *get_browser_tool_specs(),
+            *get_computer_use_tool_specs(),
             *(get_image_generation_tool_specs() if self._config.image_generation_enabled else ()),
         )
         aliases = tuple(spec.id for spec in specs)

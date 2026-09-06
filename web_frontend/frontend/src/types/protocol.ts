@@ -247,6 +247,7 @@ export interface ConversationScopeState {
   tools: ToolActivity[]
   currentPlan: RuntimePlanView | null
   runtimeActivity: RuntimeActivityView
+  computerUseActivity: ComputerUseActivityView
   contextActivity: RuntimeActivityView
   contextWindow: ContextWindowView | null
   memoryActivity: RuntimeActivityView
@@ -344,6 +345,45 @@ export interface ToolActivity {
   status: 'proposed' | 'approval' | 'started' | 'completed' | 'failed' | 'cancelled' | 'observed'
   approvalState: 'pending' | 'approved' | 'denied' | 'rejected' | null
   payload: Record<string, any>
+}
+
+export interface ComputerUseActivityView {
+  status: 'idle' | 'approval' | 'running' | 'completed' | 'failed' | 'cancelled'
+  requestId?: string | null
+  toolCallId?: string | null
+  phase?: string | null
+  step?: number | null
+  actionCount?: number | null
+  message?: string | null
+  startedAt?: string | null
+  updatedAt?: string | null
+  frame?: ComputerUseFrameView | null
+  target?: ComputerUseTargetView | null
+  accessibility?: ComputerUseAccessibilityView | null
+}
+
+export interface ComputerUseTargetView {
+  applicationId: string
+  displayName: string
+  processId: number
+  windowId: number
+  windowTitle: string
+}
+
+export interface ComputerUseFrameView {
+  frameId: number
+  width: number
+  height: number
+  mimeType: string
+  data: string
+}
+
+export interface ComputerUseAccessibilityView {
+  available: boolean
+  application: string
+  windowTitle: string
+  error: string | null
+  nodes: Array<Record<string, any>>
 }
 
 // ========== 计划 ==========
@@ -587,6 +627,7 @@ export interface RuntimeViewState {
   timeline: TimelineItem[]
   debugEvents: RuntimeFrontendEvent[]
   runtimeActivity: RuntimeActivityView
+  computerUseActivity: ComputerUseActivityView
   contextActivity: RuntimeActivityView
   contextWindow: ContextWindowView | null
   memoryActivity: RuntimeActivityView
