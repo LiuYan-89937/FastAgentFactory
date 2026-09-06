@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 import shutil
 from time import monotonic
+from collections.abc import Callable
 from typing import Any, Iterable
 
 from combo.dynamic_runtime.database import DynamicRuntimeDatabase
@@ -53,6 +54,7 @@ class ConversationLifecycleService:
         tool_output_root: Path,
         managed_workspace_root: Path,
         attachment_uploads: AttachmentUploadStore,
+        close_session_processes: Callable[[tuple[str, ...]], None],
         quiesce_timeout_seconds: float,
         quiesce_poll_seconds: float,
     ) -> None:
@@ -65,6 +67,7 @@ class ConversationLifecycleService:
         self._tool_output_root = Path(tool_output_root).expanduser().resolve()
         self._managed_workspace_root = Path(managed_workspace_root).expanduser().resolve()
         self._attachment_uploads = attachment_uploads
+        self._close_session_processes = close_session_processes
         self._quiesce_timeout_seconds = float(quiesce_timeout_seconds)
         self._quiesce_poll_seconds = float(quiesce_poll_seconds)
 
@@ -95,6 +98,7 @@ class ConversationLifecycleService:
         plan = self._plan(owner=owner, session_ids=normalized_ids)
         self._request_quiescence(plan)
         await self._await_quiescence(plan)
+        self._close_session_processes(plan.session_ids)
         self._delete_checkpoints(plan)
         detached_memories = self._delete_database_records(plan)
         released_bytes, deleted_files = self._delete_files(plan)

@@ -4,6 +4,7 @@ import type {
   ToolExecutionMessagePart,
   ToolResultMessagePart,
 } from '@/types/protocol'
+import { isRuntimeCancellation } from '@/utils/runtimeCancellation'
 
 export type ToolCategory =
   | 'read'
@@ -67,18 +68,23 @@ const TOOL_PRESENTATIONS: Record<string, Pick<ToolPresentation, 'category' | 'la
   browser_upload: { category: 'write', labelKey: 'tool.names.browserUpload', icon: 'upload' },
   browser_tabs: { category: 'read', labelKey: 'tool.names.browserTabs', icon: 'tabs' },
   browser_close: { category: 'process', labelKey: 'tool.names.browserClose', icon: 'close' },
+  computer_use: { category: 'process', labelKey: 'tool.names.computerUse', icon: 'pointer' },
 }
 
 export function conversationVisibleParts(parts: ChatMessagePart[]): ChatMessagePart[] {
-  return mergeToolMessageParts(conversationOrderedParts(parts))
+  return mergeToolMessageParts(conversationOrderedParts(parts).filter(isVisibleConversationPart))
 }
 
 export function conversationVisibleMessageParts(
   messages: ReadonlyArray<{ parts: ChatMessagePart[] }>,
 ): ChatMessagePart[] {
   return mergeToolMessageParts(
-    messages.flatMap(message => conversationOrderedParts(message.parts)),
+    messages.flatMap(message => conversationOrderedParts(message.parts).filter(isVisibleConversationPart)),
   )
+}
+
+function isVisibleConversationPart(part: ChatMessagePart): boolean {
+  return part.type !== 'error' || !isRuntimeCancellation(part.details)
 }
 
 function conversationOrderedParts(parts: ChatMessagePart[]): ChatMessagePart[] {
@@ -126,7 +132,7 @@ export function mergeToolMessageParts(parts: ChatMessagePart[]): ChatMessagePart
       if (target) {
         target.output = part.output
         target.error = part.error
-        target.status = part.status
+        target.status = isRuntimeCancellation(part.error || part.output) ? 'cancelled' : part.status
         target.startedAt = target.startedAt || part.startedAt
         target.completedAt = part.completedAt
         target.updatedAt = part.updatedAt
@@ -175,7 +181,7 @@ function executionFromResult(part: ToolResultMessagePart): ToolExecutionMessageP
     output: part.output,
     error: part.error,
     artifacts: [],
-    status: part.status,
+    status: isRuntimeCancellation(part.error || part.output) ? 'cancelled' : part.status,
     createdAt: part.createdAt,
     startedAt: part.startedAt,
     completedAt: part.completedAt,

@@ -821,6 +821,7 @@ dependencies = [
 name = "combo-desktop"
 version = "1.0.0"
 dependencies = [
+ "base64 0.22.1",
  "core-foundation 0.10.1",
  "core-foundation-sys",
  "enigo",

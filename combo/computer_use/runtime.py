@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import base64
 from dataclasses import dataclass, replace
 import logging
 import json
@@ -40,12 +39,9 @@ GOAL: {goal}"""
 
 _COMPUTER_PROMPT = """You control one attached application window. Finish GOAL quickly.
 Return the structured decision with status, actions and a short note.
-Each observation contains only the attached window screenshot and its accessibility tree. Prefer click_element and set_value with element_id over coordinates. Element IDs belong only to the current observation; after the UI changes, stop the batch and observe again. Use coordinate actions only when the target is absent from the accessibility tree.
-Actions follow the native desktop protocol defined by the output schema.
-For keyboard shortcuts use named keys (for example meta and space on macOS).
-Use type to enter text. Never send an empty key.
-x/y are normalized 0..1 coordinates in the current screenshot. Batch deterministic actions to reduce turns.
-Stop a batch before an intermediate UI change would make later coordinates uncertain. A done decision may include the final deterministic action that completes GOAL; the runtime executes it before completing. Use done without actions only when GOAL is already visibly complete.
+Each observation contains only the attached application's accessibility tree. There are no pixels or coordinate actions.
+Use perform_action only with an element_id and an action explicitly listed on that node. Use set_value only when the node lists set_value. Element IDs belong only to the current observation; after an action changes the interface, stop the batch and observe again.
+Batch only deterministic actions that cannot invalidate later element paths. A done decision may include the final deterministic action that completes GOAL; the runtime executes it before completing. Use done without actions only when GOAL is already semantically complete.
 GOAL: {goal}"""
 
 
@@ -58,19 +54,21 @@ class ComputerUseResult:
     status: str
     summary: str
     steps: int
-    final_frame_id: int
     model_calls: int
     total_tokens: int
+    application: dict[str, Any] | None = None
 
     def payload(self) -> dict[str, Any]:
-        return {
+        payload = {
             "status": self.status,
             "summary": self.summary,
             "steps": self.steps,
-            "final_frame_id": self.final_frame_id,
             "model_calls": self.model_calls,
             "total_tokens": self.total_tokens,
         }
+        if self.application is not None:
+            payload["application"] = self.application
+        return payload
 
 
 class ComputerUseCoordinator:
@@ -173,7 +171,6 @@ class ComputerUseCoordinator:
             expected_credential_revision=frozen.credential_revision,
             reasoning_intensity=1,
         )
-        include_image = "image" in resolved.input_modalities
         configured_max = resolved.settings.max_output_tokens
         max_output = (
             min(configured_max, COMPUTER_MODEL_MAX_OUTPUT_TOKENS)
@@ -200,7 +197,6 @@ class ComputerUseCoordinator:
         model_calls = 0
         total_tokens = 0
         last_note = ""
-        last_frame_id = 0
 
         usage_callback = UsageMetadataCallbackHandler()
         phase_started = perf_counter()
@@ -222,7 +218,6 @@ class ComputerUseCoordinator:
                     status="blocked",
                     summary="No controllable application windows are available.",
                     steps=0,
-                    final_frame_id=0,
                     model_calls=0,
                     total_tokens=0,
                 )
@@ -257,7 +252,6 @@ class ComputerUseCoordinator:
                     status="blocked",
                     summary=selection.note or "No listed application can satisfy this task.",
                     steps=0,
-                    final_frame_id=0,
                     model_calls=model_calls,
                     total_tokens=total_tokens,
                 )
@@ -274,6 +268,14 @@ class ComputerUseCoordinator:
             _ensure_not_cancelled(cancelled, host, session_id)
             target = host.attach_application(session_id, application_id)
             _ensure_not_cancelled(cancelled, host, session_id)
+            _logger.info(
+                "Computer use request=%s selected application_id=%s bundle_id=%s pid=%s window_id=%s",
+                instance.request.request_id,
+                target.application_id,
+                target.bundle_identifier,
+                target.process_id,
+                target.window_id,
+            )
             system = SystemMessage(content=_COMPUTER_PROMPT.format(goal=normalized_goal))
             _publish_progress(
                 on_progress,
@@ -283,12 +285,12 @@ class ComputerUseCoordinator:
             )
             observation = host.observe(session_id)
             _ensure_not_cancelled(cancelled, host, session_id)
-            _require_usable_observation(observation, include_image=include_image)
-            _logger.info("Computer use request=%s phase=first_frame elapsed_ms=%.1f",
+            _require_usable_observation(observation)
+            _log_observation(instance.request.request_id, observation)
+            _logger.info("Computer use request=%s phase=first_observation elapsed_ms=%.1f",
                          instance.request.request_id, (perf_counter() - phase_started) * 1000)
             for step in range(1, MAX_COMPUTER_STEPS + 1):
                 _ensure_not_cancelled(cancelled, host, session_id)
-                last_frame_id = observation.frame_id
                 _publish_progress(
                     on_progress,
                     phase="analyzing",
@@ -304,7 +306,6 @@ class ComputerUseCoordinator:
                         _observation_message(
                             observation,
                             last_note=last_note,
-                            include_image=include_image,
                         ),
                     ],
                     model_metadata=resolved.settings.metadata(),
@@ -340,18 +341,18 @@ class ComputerUseCoordinator:
                         status="completed",
                         summary=note or "Desktop task completed.",
                         steps=step,
-                        final_frame_id=observation.frame_id,
                         model_calls=model_calls,
                         total_tokens=total_tokens,
+                        application=_application_result(observation.target),
                     )
                 if status == "blocked":
                     return ComputerUseResult(
                         status="blocked",
                         summary=note or "Desktop task requires user intervention.",
                         steps=step,
-                        final_frame_id=observation.frame_id,
                         model_calls=model_calls,
                         total_tokens=total_tokens,
+                        application=_application_result(observation.target),
                     )
                 phase_started = perf_counter()
                 _publish_progress(
@@ -372,13 +373,10 @@ class ComputerUseCoordinator:
                     message="Reading the updated window.",
                     target=observation.target,
                 )
-                observation = host.observe(
-                    session_id,
-                    after_frame_id=observation.frame_id,
-                    settle=True,
-                )
+                observation = host.observe(session_id)
                 _ensure_not_cancelled(cancelled, host, session_id)
-                _require_usable_observation(observation, include_image=include_image)
+                _require_usable_observation(observation)
+                _log_observation(instance.request.request_id, observation)
                 _logger.info("Computer use request=%s step=%s phase=actions_and_observe elapsed_ms=%.1f",
                              instance.request.request_id, step, (perf_counter() - phase_started) * 1000)
                 if status == "done":
@@ -386,17 +384,17 @@ class ComputerUseCoordinator:
                         status="completed",
                         summary=note or "Desktop task completed.",
                         steps=step,
-                        final_frame_id=observation.frame_id,
                         model_calls=model_calls,
                         total_tokens=total_tokens,
+                        application=_application_result(observation.target),
                     )
             return ComputerUseResult(
                 status="step_limit",
                 summary="Desktop task did not finish within the computer-use step limit.",
                 steps=MAX_COMPUTER_STEPS,
-                final_frame_id=last_frame_id,
                 model_calls=model_calls,
                 total_tokens=total_tokens,
+                application=_application_result(observation.target),
             )
         except BaseException:
             failed = True
@@ -452,44 +450,93 @@ def _observation_message(
     observation: WindowObservation,
     *,
     last_note: str,
-    include_image: bool,
 ) -> HumanMessage:
     state = {
-        "frame_id": observation.frame_id,
         "application": observation.target.display_name,
         "window_title": observation.target.window_title,
         "last_action": last_note[:180],
-        "accessibility": observation.accessibility,
+        "accessibility": _model_accessibility(observation.accessibility),
     }
-    content: list[dict[str, Any]] = [
-        {"type": "text", "text": json.dumps(state, ensure_ascii=False, separators=(",", ":"))},
-    ]
-    if include_image:
-        content.append(
-            {
-                "type": "image",
-                "source_type": "base64",
-                "mime_type": observation.mime_type,
-                "data": base64.b64encode(observation.image).decode("ascii"),
-            }
-        )
-    return HumanMessage(content=content)
+    return HumanMessage(content=json.dumps(state, ensure_ascii=False, separators=(",", ":")))
 
 
-def _require_usable_observation(observation: WindowObservation, *, include_image: bool) -> None:
+def _model_accessibility(accessibility: dict[str, Any]) -> dict[str, Any]:
+    nodes = accessibility.get("nodes")
+    compact_nodes = []
+    for node in nodes if isinstance(nodes, list) else []:
+        if not isinstance(node, dict):
+            continue
+        compact = {
+            "id": node.get("element_id"),
+            "parent": node.get("parent_id"),
+            "role": str(node.get("role") or "").removeprefix("AX"),
+        }
+        for source, target in (
+            ("subrole", "subrole"),
+            ("name", "name"),
+            ("value", "value"),
+            ("identifier", "identifier"),
+            ("placeholder", "placeholder"),
+        ):
+            value = str(node.get(source) or "").strip()
+            if value:
+                compact[target] = value
+        actions = [
+            str(action)
+            for action in (node.get("actions") or [])
+            if str(action).strip()
+        ]
+        if node.get("value_settable") is True:
+            actions.append("set_value")
+        if actions:
+            compact["actions"] = actions
+        for field in ("focused", "selected", "expanded"):
+            if node.get(field) is True:
+                compact[field] = True
+        if node.get("enabled") is False:
+            compact["enabled"] = False
+        compact_nodes.append(compact)
+    return {
+        "complete": accessibility.get("complete") is True,
+        "nodes": compact_nodes,
+    }
+
+
+def _require_usable_observation(observation: WindowObservation) -> None:
     accessibility = observation.accessibility
     accessibility_available = bool(
         isinstance(accessibility, dict)
-        and accessibility.get("available") is True
+        and accessibility.get("usable") is True
     )
-    if not include_image and not accessibility_available:
+    if not accessibility_available:
         error = (
             accessibility.get("error")
             if isinstance(accessibility, dict)
             else None
         )
         detail = str(error or "accessibility tree is unavailable")
-        raise RuntimeError(f"computer use requires an accessibility tree for this text-only model: {detail}")
+        raise RuntimeError(f"computer use requires an accessibility tree: {detail}")
+
+
+def _log_observation(
+    request_id: str,
+    observation: WindowObservation,
+) -> None:
+    accessibility = observation.accessibility
+    _logger.info(
+        "Computer use request=%s application_id=%s bundle_id=%s pid=%s window_id=%s ax_usable=%s ax_complete=%s ax_nodes=%s ax_actionable=%s ax_named=%s ax_quality=%s",
+        request_id,
+        observation.target.application_id,
+        observation.target.bundle_identifier,
+        observation.target.process_id,
+        observation.target.window_id,
+        accessibility.get("usable"),
+        accessibility.get("complete"),
+        len(accessibility.get("nodes") or []),
+        accessibility.get("actionable_node_count"),
+        accessibility.get("named_node_count"),
+        accessibility.get("quality_score"),
+    )
 
 
 def _publish_progress(
@@ -512,19 +559,14 @@ def _publish_progress(
     }
     if observation is not None:
         target = observation.target
-        progress["frame"] = {
-            "frame_id": observation.frame_id,
-            "width": observation.width,
-            "height": observation.height,
-            "mime_type": observation.mime_type,
-            "data": base64.b64encode(observation.image).decode("ascii"),
-        }
         progress["accessibility"] = observation.accessibility
     if target is not None:
         progress["target"] = {
             "application_id": target.application_id,
             "display_name": target.display_name,
+            "bundle_identifier": target.bundle_identifier,
             "process_id": target.process_id,
+            "icon_data_url": target.icon_data_url,
             "window_id": target.window_id,
             "window_title": target.window_title,
         }
@@ -536,6 +578,8 @@ def _applications_message(applications: tuple[ApplicationDescriptor, ...]) -> st
         {
             "application_id": application.application_id,
             "display_name": application.display_name,
+            "bundle_identifier": application.bundle_identifier,
+            "process_id": application.process_id,
             "windows": [
                 {
                     "title": str(window.get("title") or ""),
@@ -552,6 +596,14 @@ def _applications_message(applications: tuple[ApplicationDescriptor, ...]) -> st
         ensure_ascii=False,
         separators=(",", ":"),
     )
+
+
+def _application_result(target: ApplicationTarget) -> dict[str, Any]:
+    return {
+        "display_name": target.display_name,
+        "bundle_identifier": target.bundle_identifier,
+        "icon_data_url": target.icon_data_url,
+    }
 
 
 def _usage_total(callback: UsageMetadataCallbackHandler) -> int:

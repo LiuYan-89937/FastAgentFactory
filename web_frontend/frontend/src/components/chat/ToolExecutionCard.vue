@@ -7,7 +7,13 @@
     <summary class="tool-summary">
       <span class="tool-main">
         <span class="tool-icon-shell" :class="`tool-category-${presentation.category}`">
-          <ToolIcon :name="presentation.icon" />
+          <img
+            v-if="applicationIconDataUrl"
+            class="tool-application-icon"
+            :src="applicationIconDataUrl"
+            :alt="applicationDisplayName || displayName"
+          />
+          <ToolIcon v-else :name="presentation.icon" />
         </span>
         <span class="tool-copy">
           <strong>{{ displayName }}</strong>
@@ -136,6 +142,7 @@ import { useI18n } from '@/composables/useI18n'
 import { useWorkspaceResourceUrls } from '@/composables/useWorkspaceResourceUrls'
 import { isImageResource, workspaceResourceUrl } from '@/utils/workspaceResources'
 import { toolPresentation } from '@/utils/toolPresentation'
+import { isRuntimeCancellation } from '@/utils/runtimeCancellation'
 import type {
   ArtifactMessagePart,
   ToolExecutionMessagePart,
@@ -155,12 +162,13 @@ const displayName = computed(() => (
   presentation.value.labelKey ? t(presentation.value.labelKey as any) : props.part.toolName
 ))
 const summaryText = computed(() => (
-  presentation.value.summaryKey
+  applicationDisplayName.value
+  || (presentation.value.summaryKey
     ? t(presentation.value.summaryKey as any)
-    : presentation.value.summary
+    : presentation.value.summary)
 ))
 const state = computed(() => {
-  if (props.part.status === 'cancelled') return 'cancelled'
+  if (props.part.status === 'cancelled' || isRuntimeCancellation(props.part.error || props.part.output)) return 'cancelled'
   if (props.part.error || props.part.status === 'failed') return 'failed'
   if (props.part.status === 'awaiting_approval') return 'approval'
   if (['running', 'streaming', 'requested'].includes(String(props.part.status || ''))) return 'running'
@@ -185,7 +193,7 @@ const showStatusLabel = computed(() => (
   || ['preview_ready', 'committed'].includes(String(resultRecord.value?.status || ''))
 ))
 const formattedArguments = computed(() => valueString(props.part.arguments))
-const formattedOutput = computed(() => valueString(props.part.error || props.part.output))
+const formattedOutput = computed(() => valueString(props.part.error || displayOutput(props.part.output)))
 const hasArguments = computed(() => hasValue(props.part.arguments))
 const hasOutput = computed(() => hasValue(props.part.output))
 const errorRecord = computed<Record<string, any>>(() => (
@@ -247,6 +255,19 @@ const resultRecord = computed<Record<string, any> | null>(() => {
     ? record.output as Record<string, any>
     : record
 })
+const applicationRecord = computed<Record<string, any> | null>(() => {
+  const application = resultRecord.value?.application
+  return application && typeof application === 'object' && !Array.isArray(application)
+    ? application as Record<string, any>
+    : null
+})
+const applicationIconDataUrl = computed(() => {
+  const value = String(applicationRecord.value?.icon_data_url || '').trim()
+  return value.startsWith('data:image/') ? value : ''
+})
+const applicationDisplayName = computed(() => (
+  String(applicationRecord.value?.display_name || '').trim()
+))
 const resultFacts = computed(() => {
   const result = resultRecord.value
   if (!result) return []
@@ -381,6 +402,15 @@ function valueString(value: unknown): string {
   if (value == null || value === '') return ''
   return typeof value === 'string' ? value : JSON.stringify(value, null, 2) || String(value)
 }
+
+function displayOutput(value: unknown): unknown {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return value
+  const result = value as Record<string, any>
+  const application = result.application
+  if (!application || typeof application !== 'object' || Array.isArray(application)) return value
+  const { icon_data_url: _iconDataUrl, ...visibleApplication } = application as Record<string, any>
+  return { ...result, application: visibleApplication }
+}
 </script>
 
 <style scoped>
@@ -450,6 +480,13 @@ function valueString(value: unknown): string {
   display: block;
   width: 18px;
   height: 18px;
+}
+
+.tool-application-icon {
+  display: block;
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
 }
 
 .tool-copy {

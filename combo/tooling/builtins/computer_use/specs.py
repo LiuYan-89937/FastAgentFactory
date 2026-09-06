@@ -11,10 +11,10 @@ def get_computer_use_tool_specs() -> list[ToolSpec]:
         ToolSpec(
             id="computer_use",
             description=(
-                "Operate the user's macOS or Windows desktop through the system-level visual computer-use runtime. "
+                "Operate the user's macOS or Windows desktop through the system-level accessibility runtime. "
                 "Use this for native desktop applications and whole-desktop interaction. It is independent from the "
                 "browser_* built-in tools. Provide one concise goal; the computer-use runtime performs its own "
-                "low-token vision/action loop and returns only the terminal result."
+                "AX Tree observation/action loop and returns only the terminal result."
             ),
             entrypoint="combo.tooling.builtins.computer_use.tool:run",
             input_schema={
@@ -23,7 +23,7 @@ def get_computer_use_tool_specs() -> list[ToolSpec]:
                     "goal": {
                         "type": "string",
                         "minLength": 1,
-                        "description": "A concise, complete desktop task objective for the visual computer-use loop.",
+                        "description": "A concise, complete desktop task objective for the accessibility loop.",
                     }
                 },
                 "required": ["goal"],
@@ -38,15 +38,23 @@ def get_computer_use_tool_specs() -> list[ToolSpec]:
                     },
                     "summary": {"type": "string"},
                     "steps": {"type": "integer"},
-                    "final_frame_id": {"type": "integer"},
                     "model_calls": {"type": "integer"},
                     "total_tokens": {"type": "integer"},
+                    "application": {
+                        "type": "object",
+                        "properties": {
+                            "display_name": {"type": "string"},
+                            "bundle_identifier": {"type": ["string", "null"]},
+                            "icon_data_url": {"type": ["string", "null"]},
+                        },
+                        "required": ["display_name", "bundle_identifier", "icon_data_url"],
+                        "additionalProperties": False,
+                    },
                 },
                 "required": [
                     "status",
                     "summary",
                     "steps",
-                    "final_frame_id",
                     "model_calls",
                     "total_tokens",
                 ],

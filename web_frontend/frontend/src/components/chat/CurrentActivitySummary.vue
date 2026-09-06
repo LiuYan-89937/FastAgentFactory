@@ -18,21 +18,6 @@
     </div>
 
     <div v-if="activity.kind === 'computer_use'" class="computer-use-observation">
-      <section class="computer-frame-panel">
-        <header class="observation-header">
-          <span>{{ t('conversation.computerUse.currentFrame') }}</span>
-          <span v-if="activity.frame">#{{ activity.frame.frameId }}</span>
-        </header>
-        <div class="computer-frame-stage">
-          <img
-            v-if="frameSource"
-            :src="frameSource"
-            :alt="t('conversation.computerUse.frameAlt', { frame: activity.frame?.frameId || 0 })"
-          />
-          <span v-else>{{ t('conversation.computerUse.waitingFrame') }}</span>
-        </div>
-      </section>
-
       <section class="accessibility-panel">
         <header class="observation-header">
           <span>AX Tree</span>
@@ -76,10 +61,6 @@ const elapsedText = computed(() => {
   const elapsedSeconds = Math.max(0, Math.floor((now.value - startedAt) / 1000))
   if (elapsedSeconds < 60) return `${elapsedSeconds}s`
   return `${Math.floor(elapsedSeconds / 60)}m ${elapsedSeconds % 60}s`
-})
-const frameSource = computed(() => {
-  const frame = props.activity.frame
-  return frame ? `data:${frame.mimeType};base64,${frame.data}` : ''
 })
 const accessibilityMeta = computed(() => {
   const accessibility = props.activity.accessibility
@@ -187,8 +168,6 @@ function compactText(value: unknown): string {
 }
 
 .computer-use-observation {
-  display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(260px, .85fr);
   height: 270px;
   margin-top: 9px;
   overflow: hidden;
@@ -199,16 +178,11 @@ function compactText(value: unknown): string {
   color: var(--app-text);
 }
 
-.computer-frame-panel,
 .accessibility-panel {
   min-width: 0;
   min-height: 0;
   display: grid;
   grid-template-rows: 34px minmax(0, 1fr);
-}
-
-.accessibility-panel {
-  border-left: 1px solid var(--app-border);
 }
 
 .observation-header {
@@ -229,22 +203,6 @@ function compactText(value: unknown): string {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.computer-frame-stage {
-  min-height: 0;
-  display: grid;
-  place-items: center;
-  overflow: hidden;
-  background: #111;
-  color: rgba(255, 255, 255, .56);
-  font-size: 11px;
-}
-
-.computer-frame-stage img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
 }
 
 .accessibility-tree {
@@ -295,14 +253,7 @@ function compactText(value: unknown): string {
 
 @media (max-width: 760px) {
   .computer-use-observation {
-    grid-template-columns: 1fr;
-    grid-template-rows: minmax(0, 1fr) minmax(110px, .7fr);
-    height: 420px;
-  }
-
-  .accessibility-panel {
-    border-top: 1px solid var(--app-border);
-    border-left: 0;
+    height: 320px;
   }
 }
 </style>

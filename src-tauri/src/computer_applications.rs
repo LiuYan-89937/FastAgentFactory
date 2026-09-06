@@ -10,17 +10,6 @@ pub struct WindowBounds {
     pub height: u32,
 }
 
-impl WindowBounds {
-    pub fn contains(&self, x: i32, y: i32) -> bool {
-        let right = i64::from(self.x) + i64::from(self.width);
-        let bottom = i64::from(self.y) + i64::from(self.height);
-        i64::from(x) >= i64::from(self.x)
-            && i64::from(x) < right
-            && i64::from(y) >= i64::from(self.y)
-            && i64::from(y) < bottom
-    }
-}
-
 #[derive(Clone, Debug, Serialize)]
 pub struct ApplicationWindowDescriptor {
     pub window_id: u32,
@@ -34,6 +23,8 @@ pub struct ApplicationWindowDescriptor {
 pub struct ApplicationDescriptor {
     pub application_id: String,
     pub display_name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bundle_identifier: Option<String>,
     pub process_id: u32,
     pub windows: Vec<ApplicationWindowDescriptor>,
 }
@@ -42,15 +33,29 @@ pub struct ApplicationDescriptor {
 pub struct ApplicationTarget {
     pub application_id: String,
     pub display_name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bundle_identifier: Option<String>,
     pub process_id: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub icon_data_url: Option<String>,
     pub window_id: u32,
     pub window_title: String,
     pub bounds: WindowBounds,
 }
 
 pub fn list_applications() -> Result<Vec<ApplicationDescriptor>, String> {
-    let windows = Window::all().map_err(|error| error.to_string())?;
     let mut applications = BTreeMap::<u32, ApplicationDescriptor>::new();
+    for application in platform::running_applications()? {
+        applications.insert(application.process_id, application);
+    }
+    let windows = match Window::all() {
+        Ok(windows) => windows,
+        Err(error) if !applications.is_empty() => {
+            eprintln!("Could not enrich running applications with windows: {error}");
+            Vec::new()
+        }
+        Err(error) => return Err(error.to_string()),
+    };
     for window in windows {
         let Ok(process_id) = window.pid() else {
             continue;
@@ -88,6 +93,7 @@ pub fn list_applications() -> Result<Vec<ApplicationDescriptor>, String> {
             .or_insert_with(|| ApplicationDescriptor {
                 application_id: format!("process:{process_id}"),
                 display_name,
+                bundle_identifier: None,
                 process_id,
                 windows: Vec::new(),
             })
@@ -107,12 +113,26 @@ pub fn list_applications() -> Result<Vec<ApplicationDescriptor>, String> {
     Ok(result)
 }
 
-pub fn resolve_application(application_id: &str) -> Result<ApplicationTarget, String> {
-    let application = list_applications()?
+pub fn application_descriptor(application_id: &str) -> Result<ApplicationDescriptor, String> {
+    list_applications()?
         .into_iter()
         .find(|candidate| candidate.application_id == application_id)
-        .ok_or_else(|| format!("application is no longer available: {application_id}"))?;
-    target_from_application(application)
+        .ok_or_else(|| format!("application is no longer available: {application_id}"))
+}
+
+pub fn resolve_application_target(
+    application: &ApplicationDescriptor,
+) -> Result<ApplicationTarget, String> {
+    let refreshed = list_applications()?
+        .into_iter()
+        .find(|candidate| candidate.application_id == application.application_id)
+        .ok_or_else(|| {
+            format!(
+                "application exited while attaching: {}",
+                application.display_name
+            )
+        })?;
+    target_from_application(refreshed)
 }
 
 pub fn resolve_target_window(
@@ -149,14 +169,16 @@ pub fn resolve_target_window(
     });
     let (window_id, width, height, window) = candidates.into_iter().next().ok_or_else(|| {
         format!(
-            "target application has no capturable window: {}",
+            "target application has no available window: {}",
             target.display_name
         )
     })?;
     let resolved = ApplicationTarget {
         application_id: target.application_id.clone(),
         display_name: target.display_name.clone(),
+        bundle_identifier: target.bundle_identifier.clone(),
         process_id: target.process_id,
+        icon_data_url: target.icon_data_url.clone(),
         window_id,
         window_title: window.title().unwrap_or_default(),
         bounds: WindowBounds {
@@ -169,8 +191,9 @@ pub fn resolve_target_window(
     Ok((resolved, window))
 }
 
+#[cfg(not(target_os = "macos"))]
 pub fn activate_target(target: &ApplicationTarget) -> Result<(), String> {
-    platform::activate(target)
+    platform::activate(target.process_id, Some(target.window_id))
 }
 
 fn target_from_application(
@@ -178,14 +201,16 @@ fn target_from_application(
 ) -> Result<ApplicationTarget, String> {
     let window = application.windows.into_iter().next().ok_or_else(|| {
         format!(
-            "application has no capturable window: {}",
+            "application has no available window: {}",
             application.display_name
         )
     })?;
     Ok(ApplicationTarget {
         application_id: application.application_id,
         display_name: application.display_name,
+        bundle_identifier: application.bundle_identifier,
         process_id: application.process_id,
+        icon_data_url: platform::application_icon_data_url(application.process_id),
         window_id: window.window_id,
         window_title: window.title,
         bounds: window.bounds,
@@ -202,42 +227,100 @@ fn window_priority(window: &ApplicationWindowDescriptor) -> (u8, u8, std::cmp::R
 
 #[cfg(target_os = "macos")]
 mod platform {
-    use super::ApplicationTarget;
-    use objc2_app_kit::{NSApplicationActivationOptions, NSRunningApplication};
+    use super::ApplicationDescriptor;
+    use base64::{engine::general_purpose::STANDARD, Engine as _};
+    use objc2_app_kit::NSRunningApplication;
+    use objc2_app_kit::{NSApplicationActivationPolicy, NSWorkspace};
+    use std::io::Cursor;
+    use std::ptr::NonNull;
+    use xcap::image::ImageFormat;
 
-    pub fn activate(target: &ApplicationTarget) -> Result<(), String> {
-        let process_id = target.process_id;
-        let application = NSRunningApplication::runningApplicationWithProcessIdentifier(
-            process_id
-                .try_into()
-                .map_err(|_| format!("invalid application process id: {process_id}"))?,
-        )
-        .ok_or_else(|| format!("application process is no longer running: {process_id}"))?;
-        application.unhide();
-        if !application.activateWithOptions(NSApplicationActivationOptions::ActivateAllWindows) {
-            return Err(format!(
-                "macOS refused to activate application process: {process_id}"
-            ));
+    pub fn running_applications() -> Result<Vec<ApplicationDescriptor>, String> {
+        let workspace = NSWorkspace::sharedWorkspace();
+        let running = workspace.runningApplications();
+        let mut applications = Vec::new();
+        for index in 0..running.count() {
+            let application = running.objectAtIndex(index);
+            if application.isTerminated()
+                || application.activationPolicy() != NSApplicationActivationPolicy::Regular
+            {
+                continue;
+            }
+            let process_id = application.processIdentifier();
+            let Some(display_name) = application.localizedName() else {
+                continue;
+            };
+            let display_name = display_name.to_string();
+            if process_id <= 0 || display_name.trim().is_empty() {
+                continue;
+            }
+            let process_id = process_id as u32;
+            let bundle_identifier = application
+                .bundleIdentifier()
+                .map(|value| value.to_string())
+                .filter(|value| !value.trim().is_empty());
+            applications.push(ApplicationDescriptor {
+                application_id: bundle_identifier
+                    .as_ref()
+                    .map(|value| format!("bundle:{value}"))
+                    .unwrap_or_else(|| format!("process:{process_id}")),
+                display_name,
+                bundle_identifier,
+                process_id,
+                windows: Vec::new(),
+            });
         }
-        Ok(())
+        Ok(applications)
+    }
+
+    pub fn application_icon_data_url(process_id: u32) -> Option<String> {
+        let process_id = i32::try_from(process_id).ok()?;
+        let application =
+            NSRunningApplication::runningApplicationWithProcessIdentifier(process_id)?;
+        let icon = application.icon()?;
+        let representation = icon.TIFFRepresentation()?;
+        let length = representation.length();
+        if length == 0 {
+            return None;
+        }
+        let mut tiff = vec![0_u8; length];
+        let buffer = NonNull::new(tiff.as_mut_ptr().cast())?;
+        unsafe { representation.getBytes_length(buffer, length) };
+        let image = xcap::image::load_from_memory(&tiff).ok()?.thumbnail(64, 64);
+        let mut png = Cursor::new(Vec::new());
+        image.write_to(&mut png, ImageFormat::Png).ok()?;
+        Some(format!(
+            "data:image/png;base64,{}",
+            STANDARD.encode(png.into_inner())
+        ))
     }
 }
 
 #[cfg(target_os = "windows")]
 mod platform {
-    use super::ApplicationTarget;
+    use super::ApplicationDescriptor;
     use windows::Win32::Foundation::HWND;
     use windows::Win32::UI::WindowsAndMessaging::{
         SetForegroundWindow, ShowWindowAsync, SW_RESTORE,
     };
-    pub fn activate(target: &ApplicationTarget) -> Result<(), String> {
-        let handle = HWND(target.window_id as isize as *mut _);
+    pub fn running_applications() -> Result<Vec<ApplicationDescriptor>, String> {
+        Ok(Vec::new())
+    }
+
+    pub fn application_icon_data_url(_: u32) -> Option<String> {
+        None
+    }
+
+    pub fn activate(process_id: u32, window_id: Option<u32>) -> Result<(), String> {
+        let window_id =
+            window_id.ok_or_else(|| format!("application process has no window: {process_id}"))?;
+        let handle = HWND(window_id as isize as *mut _);
         unsafe {
             let _ = ShowWindowAsync(handle, SW_RESTORE);
             if !SetForegroundWindow(handle).as_bool() {
                 return Err(format!(
                     "Windows refused to activate application process: {}",
-                    target.process_id
+                    process_id
                 ));
             }
         }
@@ -247,9 +330,17 @@ mod platform {
 
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
 mod platform {
-    use super::ApplicationTarget;
+    use super::ApplicationDescriptor;
 
-    pub fn activate(_: &ApplicationTarget) -> Result<(), String> {
+    pub fn running_applications() -> Result<Vec<ApplicationDescriptor>, String> {
+        Ok(Vec::new())
+    }
+
+    pub fn application_icon_data_url(_: u32) -> Option<String> {
+        None
+    }
+
+    pub fn activate(_: u32, _: Option<u32>) -> Result<(), String> {
         Err("application activation is not supported on this platform".into())
     }
 }

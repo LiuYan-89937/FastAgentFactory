@@ -1,19 +1,28 @@
 use serde::Serialize;
+use std::collections::BTreeMap;
 
 use crate::computer_applications::{ApplicationTarget, WindowBounds};
 
 const MAX_ACCESSIBILITY_NODES: usize = 320;
-const MAX_ACCESSIBILITY_DEPTH: usize = 12;
+const MAX_ACCESSIBILITY_RAW_NODES: usize = 2_048;
+const MAX_ACCESSIBILITY_DEPTH: usize = 32;
 const MAX_ACCESSIBILITY_TEXT_CHARS: usize = 240;
 
 #[derive(Clone, Debug, Serialize)]
 pub struct AccessibilitySnapshot {
     pub available: bool,
+    pub usable: bool,
+    pub complete: bool,
     pub application: String,
     pub window_title: String,
     pub nodes: Vec<AccessibilityNode>,
+    pub actionable_node_count: usize,
+    pub named_node_count: usize,
+    pub quality_score: f64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+    #[serde(skip)]
+    element_paths: BTreeMap<u32, Vec<usize>>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -23,11 +32,24 @@ pub struct AccessibilityNode {
     pub parent_id: Option<u32>,
     pub role: String,
     #[serde(skip_serializing_if = "String::is_empty")]
+    pub subrole: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
     pub name: String,
     #[serde(skip_serializing_if = "String::is_empty")]
     pub value: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub identifier: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub placeholder: String,
     pub enabled: bool,
+    pub focused: bool,
     pub focusable: bool,
+    pub selected: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expanded: Option<bool>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub actions: Vec<String>,
+    pub value_settable: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bounds: Option<NormalizedBounds>,
 }
@@ -40,46 +62,77 @@ pub struct NormalizedBounds {
     pub height: f64,
 }
 
+struct RawAccessibilityNode {
+    parent_index: Option<usize>,
+    path: Vec<usize>,
+    node: AccessibilityNode,
+}
+
 impl AccessibilitySnapshot {
     pub fn unavailable(error: impl Into<String>) -> Self {
         Self {
             available: false,
+            usable: false,
+            complete: false,
             application: String::new(),
             window_title: String::new(),
             nodes: Vec::new(),
+            actionable_node_count: 0,
+            named_node_count: 0,
+            quality_score: 0.0,
             error: Some(error.into()),
+            element_paths: BTreeMap::new(),
         }
     }
 
-    pub fn element_target(
-        &self,
-        element_id: u32,
-        current_window: WindowBounds,
-    ) -> Result<(i32, i32), String> {
-        let node = self
-            .nodes
+    fn captured(
+        target: &ApplicationTarget,
+        window_title: String,
+        nodes: Vec<AccessibilityNode>,
+        element_paths: BTreeMap<u32, Vec<usize>>,
+        complete: bool,
+    ) -> Self {
+        let actionable_node_count = nodes
             .iter()
-            .find(|node| node.element_id == element_id)
-            .ok_or_else(|| {
-                format!("accessibility element is not in the current observation: {element_id}")
-            })?;
-        let bounds = node.bounds.ok_or_else(|| {
-            format!("accessibility element has no actionable bounds: {element_id}")
-        })?;
-        let x = bounds.x + bounds.width / 2.0;
-        let y = bounds.y + bounds.height / 2.0;
-        normalized_window_point(current_window, x, y)
+            .filter(|node| is_directly_actionable(node))
+            .count();
+        let named_node_count = nodes
+            .iter()
+            .filter(|node| {
+                !node.name.is_empty() || !node.value.is_empty() || !node.placeholder.is_empty()
+            })
+            .count();
+        let semantic_nodes = nodes.iter().filter(|node| is_semantic_node(node)).count();
+        let usable = !nodes.is_empty() && semantic_nodes > 0;
+        let denominator = nodes.len().max(1) as f64;
+        let semantic_ratio = (semantic_nodes.min(nodes.len()) as f64) / denominator;
+        let quality_score = if usable {
+            (0.35 + semantic_ratio * 0.5 + if complete { 0.15 } else { 0.0 }).min(1.0)
+        } else {
+            0.0
+        };
+        Self {
+            available: true,
+            usable,
+            complete,
+            application: limited_text(target.display_name.clone()),
+            window_title: limited_text(window_title),
+            nodes,
+            actionable_node_count,
+            named_node_count,
+            quality_score,
+            error: (!usable)
+                .then(|| "Accessibility returned no semantic controls or content".into()),
+            element_paths,
+        }
     }
-}
 
-fn normalized_window_point(window: WindowBounds, x: f64, y: f64) -> Result<(i32, i32), String> {
-    let px = f64::from(window.x) + x * f64::from(window.width.saturating_sub(1));
-    let py = f64::from(window.y) + y * f64::from(window.height.saturating_sub(1));
-    let point = (px.round() as i32, py.round() as i32);
-    window
-        .contains(point.0, point.1)
-        .then_some(point)
-        .ok_or_else(|| "accessibility target is outside the current window".into())
+    fn element_path(&self, element_id: u32) -> Result<&[usize], String> {
+        self.element_paths
+            .get(&element_id)
+            .map(Vec::as_slice)
+            .ok_or_else(|| format!("accessibility element has no native locator: {element_id}"))
+    }
 }
 
 fn normalized_bounds(
@@ -114,12 +167,80 @@ fn limited_text(value: String) -> String {
         .collect()
 }
 
+fn is_semantic_node(node: &AccessibilityNode) -> bool {
+    !node.name.is_empty()
+        || !node.value.is_empty()
+        || !node.placeholder.is_empty()
+        || node.role == "AXWebArea"
+        || is_directly_actionable(node)
+}
+
+fn is_directly_actionable(node: &AccessibilityNode) -> bool {
+    node.enabled && node.role != "AXGroup" && (node.value_settable || !node.actions.is_empty())
+}
+
+fn compact_nodes(
+    raw_nodes: Vec<RawAccessibilityNode>,
+) -> (Vec<AccessibilityNode>, BTreeMap<u32, Vec<usize>>, bool) {
+    let selected_indices = raw_nodes
+        .iter()
+        .enumerate()
+        .filter_map(|(index, raw)| (index == 0 || is_semantic_node(&raw.node)).then_some(index))
+        .collect::<Vec<_>>();
+    let projection_truncated = selected_indices.len() > MAX_ACCESSIBILITY_NODES;
+    let selected_indices = selected_indices
+        .into_iter()
+        .take(MAX_ACCESSIBILITY_NODES)
+        .collect::<Vec<_>>();
+    let identifiers = selected_indices
+        .iter()
+        .enumerate()
+        .map(|(position, raw_index)| (*raw_index, position as u32 + 1))
+        .collect::<BTreeMap<_, _>>();
+    let mut nodes = Vec::with_capacity(selected_indices.len());
+    let mut paths = BTreeMap::new();
+    for raw_index in selected_indices {
+        let raw = &raw_nodes[raw_index];
+        let element_id = identifiers[&raw_index];
+        let mut ancestor = raw.parent_index;
+        let parent_id = loop {
+            let Some(index) = ancestor else {
+                break None;
+            };
+            if let Some(parent_id) = identifiers.get(&index) {
+                break Some(*parent_id);
+            }
+            ancestor = raw_nodes[index].parent_index;
+        };
+        let mut node = raw.node.clone();
+        node.element_id = element_id;
+        node.parent_id = parent_id;
+        paths.insert(element_id, raw.path.clone());
+        nodes.push(node);
+    }
+    (nodes, paths, projection_truncated)
+}
+
 pub fn capture_accessibility_tree(target: &ApplicationTarget) -> AccessibilitySnapshot {
     platform::capture(target).unwrap_or_else(AccessibilitySnapshot::unavailable)
 }
 
-pub fn focus_accessibility_window(target: &ApplicationTarget) -> Result<(), String> {
-    platform::focus(target)
+pub fn perform_accessibility_element_action(
+    target: &ApplicationTarget,
+    snapshot: &AccessibilitySnapshot,
+    element_id: u32,
+    action: &str,
+) -> Result<(), String> {
+    platform::perform_action(target, snapshot, element_id, action)
+}
+
+pub fn set_accessibility_element_value(
+    target: &ApplicationTarget,
+    snapshot: &AccessibilitySnapshot,
+    element_id: u32,
+    text: &str,
+) -> Result<(), String> {
+    platform::set_value(target, snapshot, element_id, text)
 }
 
 #[cfg(target_os = "macos")]
@@ -127,7 +248,9 @@ mod platform {
     use super::*;
     use core_foundation::base::{CFGetTypeID, CFRelease, CFTypeID, CFTypeRef, TCFType};
     use core_foundation::string::{CFString, CFStringGetTypeID, CFStringRef};
-    use core_foundation_sys::array::{CFArrayGetCount, CFArrayGetTypeID, CFArrayGetValueAtIndex};
+    use core_foundation_sys::array::{
+        CFArrayGetCount, CFArrayGetTypeID, CFArrayGetValueAtIndex, CFArrayRef,
+    };
     use std::ffi::c_void;
     use std::ptr;
 
@@ -169,6 +292,17 @@ mod platform {
             value: *mut CFTypeRef,
         ) -> AXError;
         fn AXUIElementPerformAction(element: AXUIElementRef, action: CFStringRef) -> AXError;
+        fn AXUIElementCopyActionNames(element: AXUIElementRef, names: *mut CFArrayRef) -> AXError;
+        fn AXUIElementIsAttributeSettable(
+            element: AXUIElementRef,
+            attribute: CFStringRef,
+            settable: *mut bool,
+        ) -> AXError;
+        fn AXUIElementSetAttributeValue(
+            element: AXUIElementRef,
+            attribute: CFStringRef,
+            value: CFTypeRef,
+        ) -> AXError;
         fn AXValueGetType(value: AXValueRef) -> u32;
         fn AXValueGetValue(value: AXValueRef, value_type: u32, output: *mut c_void) -> bool;
     }
@@ -194,57 +328,124 @@ mod platform {
             if application.0.is_null() {
                 return Err("target application is unavailable from macOS Accessibility".into());
             }
-            let window = target_window(application.0 as AXUIElementRef, target);
-            let root = window.as_ref().unwrap_or(&application);
-            let window_title = string_attribute(root.0 as AXUIElementRef, "AXTitle");
-            let mut nodes = Vec::new();
-            visit(root.0 as AXUIElementRef, None, 0, target.bounds, &mut nodes);
-            Ok(AccessibilitySnapshot {
-                available: true,
-                application: limited_text(target.display_name.clone()),
-                window_title: limited_text(window_title),
-                nodes,
-                error: None,
-            })
-        }
-    }
-
-    pub fn focus(target: &ApplicationTarget) -> Result<(), String> {
-        unsafe {
-            let application = OwnedValue(AXUIElementCreateApplication(
-                target
-                    .process_id
-                    .try_into()
-                    .map_err(|_| "application process id is outside the macOS AX range")?,
-            ) as CFTypeRef);
-            if application.0.is_null() {
-                return Err("target application is unavailable from macOS Accessibility".into());
-            }
             let window =
                 target_window(application.0 as AXUIElementRef, target).ok_or_else(|| {
                     "target window is unavailable from macOS Accessibility".to_string()
                 })?;
-            let action = CFString::new("AXRaise");
-            if AXUIElementPerformAction(window.0 as AXUIElementRef, action.as_concrete_TypeRef())
-                != AX_SUCCESS
-            {
-                return Err("macOS Accessibility could not raise the target window".into());
+            let root = &window;
+            let window_title = string_attribute(root.0 as AXUIElementRef, "AXTitle");
+            let mut raw_nodes = Vec::new();
+            let mut traversal_truncated = false;
+            visit(
+                root.0 as AXUIElementRef,
+                None,
+                Vec::new(),
+                0,
+                target.bounds,
+                &mut raw_nodes,
+                &mut traversal_truncated,
+            );
+            let (nodes, element_paths, projection_truncated) = compact_nodes(raw_nodes);
+            Ok(AccessibilitySnapshot::captured(
+                target,
+                window_title,
+                nodes,
+                element_paths,
+                !traversal_truncated && !projection_truncated,
+            ))
+        }
+    }
+
+    pub fn perform_action(
+        target: &ApplicationTarget,
+        snapshot: &AccessibilitySnapshot,
+        element_id: u32,
+        action: &str,
+    ) -> Result<(), String> {
+        let action = action.trim();
+        if action.is_empty() {
+            return Err("accessibility action must not be empty".into());
+        }
+        let node = snapshot
+            .nodes
+            .iter()
+            .find(|node| node.element_id == element_id)
+            .ok_or_else(|| {
+                format!("accessibility element is not in the current observation: {element_id}")
+            })?;
+        if !node.actions.iter().any(|candidate| candidate == action) {
+            return Err(format!(
+                "accessibility action is not available for element {element_id}: {action}"
+            ));
+        }
+        unsafe {
+            let element = resolve_observed_element(target, snapshot.element_path(element_id)?)?;
+            let action_name = CFString::new(action);
+            let result = AXUIElementPerformAction(
+                element.0 as AXUIElementRef,
+                action_name.as_concrete_TypeRef(),
+            );
+            if result == AX_SUCCESS {
+                Ok(())
+            } else {
+                Err(format!(
+                    "macOS Accessibility action {action} failed for element {element_id}: {result}"
+                ))
             }
-            Ok(())
+        }
+    }
+
+    pub fn set_value(
+        target: &ApplicationTarget,
+        snapshot: &AccessibilitySnapshot,
+        element_id: u32,
+        text: &str,
+    ) -> Result<(), String> {
+        let node = snapshot
+            .nodes
+            .iter()
+            .find(|node| node.element_id == element_id)
+            .ok_or_else(|| {
+                format!("accessibility element is not in the current observation: {element_id}")
+            })?;
+        if !node.value_settable {
+            return Err(format!(
+                "accessibility element value is not settable: {element_id}"
+            ));
+        }
+        unsafe {
+            let element = resolve_observed_element(target, snapshot.element_path(element_id)?)?;
+            let attribute = CFString::new("AXValue");
+            let value = CFString::new(text);
+            let result = AXUIElementSetAttributeValue(
+                element.0 as AXUIElementRef,
+                attribute.as_concrete_TypeRef(),
+                value.as_concrete_TypeRef().cast(),
+            );
+            if result == AX_SUCCESS {
+                Ok(())
+            } else {
+                Err(format!(
+                    "macOS Accessibility could not set element {element_id} value: {result}"
+                ))
+            }
         }
     }
 
     unsafe fn visit(
         element: AXUIElementRef,
-        parent_id: Option<u32>,
+        parent_index: Option<usize>,
+        path: Vec<usize>,
         depth: usize,
         surface: WindowBounds,
-        nodes: &mut Vec<AccessibilityNode>,
+        nodes: &mut Vec<RawAccessibilityNode>,
+        truncated: &mut bool,
     ) {
-        if depth > MAX_ACCESSIBILITY_DEPTH || nodes.len() >= MAX_ACCESSIBILITY_NODES {
+        if depth > MAX_ACCESSIBILITY_DEPTH || nodes.len() >= MAX_ACCESSIBILITY_RAW_NODES {
+            *truncated = true;
             return;
         }
-        let element_id = nodes.len() as u32 + 1;
+        let raw_index = nodes.len();
         let role = string_attribute(element, "AXRole");
         let subrole = string_attribute(element, "AXSubrole");
         let title = string_attribute(element, "AXTitle");
@@ -260,23 +461,35 @@ mod platform {
             string_attribute(element, "AXValue")
         };
         let rect = element_rect(element);
-        nodes.push(AccessibilityNode {
-            element_id,
-            parent_id,
-            role: limited_text(role),
-            name: limited_text(name),
-            value: limited_text(value),
-            enabled: bool_attribute(element, "AXEnabled").unwrap_or(true),
-            focusable: bool_attribute(element, "AXFocused").is_some(),
-            bounds: rect.and_then(|rect| {
-                normalized_bounds(
-                    rect.origin.x,
-                    rect.origin.y,
-                    rect.size.width,
-                    rect.size.height,
-                    surface,
-                )
-            }),
+        nodes.push(RawAccessibilityNode {
+            parent_index,
+            path: path.clone(),
+            node: AccessibilityNode {
+                element_id: 0,
+                parent_id: None,
+                role: limited_text(role),
+                subrole: limited_text(subrole),
+                name: limited_text(name),
+                value: limited_text(value),
+                identifier: limited_text(string_attribute(element, "AXIdentifier")),
+                placeholder: limited_text(string_attribute(element, "AXPlaceholderValue")),
+                enabled: bool_attribute(element, "AXEnabled").unwrap_or(true),
+                focused: bool_attribute(element, "AXFocused").unwrap_or(false),
+                focusable: attribute_settable(element, "AXFocused"),
+                selected: bool_attribute(element, "AXSelected").unwrap_or(false),
+                expanded: bool_attribute(element, "AXExpanded"),
+                actions: action_names(element),
+                value_settable: attribute_settable(element, "AXValue"),
+                bounds: rect.and_then(|rect| {
+                    normalized_bounds(
+                        rect.origin.x,
+                        rect.origin.y,
+                        rect.size.width,
+                        rect.size.height,
+                        surface,
+                    )
+                }),
+            },
         });
         let Some(children) = copy_attribute(element, "AXChildren") else {
             return;
@@ -286,14 +499,58 @@ mod platform {
         }
         let count = CFArrayGetCount(children.0.cast());
         for index in 0..count {
-            if nodes.len() >= MAX_ACCESSIBILITY_NODES {
+            if nodes.len() >= MAX_ACCESSIBILITY_RAW_NODES {
+                *truncated = true;
                 break;
             }
             let child = CFArrayGetValueAtIndex(children.0.cast(), index) as AXUIElementRef;
             if !child.is_null() {
-                visit(child, Some(element_id), depth + 1, surface, nodes);
+                let mut child_path = path.clone();
+                child_path.push(index as usize);
+                visit(
+                    child,
+                    Some(raw_index),
+                    child_path,
+                    depth + 1,
+                    surface,
+                    nodes,
+                    truncated,
+                );
             }
         }
+    }
+
+    unsafe fn resolve_observed_element(
+        target: &ApplicationTarget,
+        path: &[usize],
+    ) -> Result<OwnedValue, String> {
+        let application = OwnedValue(AXUIElementCreateApplication(
+            target
+                .process_id
+                .try_into()
+                .map_err(|_| "application process id is outside the macOS AX range")?,
+        ) as CFTypeRef);
+        if application.0.is_null() {
+            return Err("target application is unavailable from macOS Accessibility".into());
+        }
+        let mut current = target_window(application.0 as AXUIElementRef, target)
+            .ok_or_else(|| "target window is unavailable from macOS Accessibility".to_string())?;
+        for child_index in path {
+            let children = copy_attribute(current.0 as AXUIElementRef, "AXChildren")
+                .ok_or_else(|| "accessibility element path is no longer available".to_string())?;
+            if CFGetTypeID(children.0) != CFArrayGetTypeID() {
+                return Err("accessibility element path no longer resolves to children".into());
+            }
+            let count = CFArrayGetCount(children.0.cast());
+            if *child_index >= count as usize {
+                return Err("accessibility element path changed after observation".into());
+            }
+            let child =
+                CFArrayGetValueAtIndex(children.0.cast(), *child_index as isize) as AXUIElementRef;
+            current = retain_element(child)
+                .ok_or_else(|| "accessibility element disappeared after observation".to_string())?;
+        }
+        Ok(current)
     }
 
     unsafe fn target_window(
@@ -304,26 +561,39 @@ mod platform {
         if CFGetTypeID(windows.0) != CFArrayGetTypeID() {
             return copy_attribute(application, "AXFocusedWindow");
         }
-        let mut best: Option<(f64, AXUIElementRef)> = None;
+        let mut best: Option<(f64, f64, bool, AXUIElementRef)> = None;
         let count = CFArrayGetCount(windows.0.cast());
         for index in 0..count {
             let candidate = CFArrayGetValueAtIndex(windows.0.cast(), index) as AXUIElementRef;
             if candidate.is_null() {
                 continue;
             }
-            if !target.window_title.is_empty()
-                && string_attribute(candidate, "AXTitle") == target.window_title
-            {
-                return retain_element(candidate);
-            }
-            let overlap = element_rect(candidate)
-                .map(|rect| overlap_area(rect, target.bounds))
-                .unwrap_or_default();
-            if best.map(|(area, _)| overlap > area).unwrap_or(true) {
-                best = Some((overlap, candidate));
+            let title_matches = !target.window_title.is_empty()
+                && string_attribute(candidate, "AXTitle") == target.window_title;
+            let (overlap, geometry_delta) = element_rect(candidate)
+                .map(|rect| {
+                    (
+                        overlap_area(rect, target.bounds),
+                        geometry_delta(rect, target.bounds),
+                    )
+                })
+                .unwrap_or((0.0, f64::INFINITY));
+            let is_better = best
+                .map(|(best_overlap, best_delta, best_title_matches, _)| {
+                    overlap > best_overlap
+                        || (overlap == best_overlap && geometry_delta < best_delta)
+                        || (overlap == best_overlap
+                            && geometry_delta == best_delta
+                            && title_matches
+                            && !best_title_matches)
+                })
+                .unwrap_or(true);
+            if is_better {
+                best = Some((overlap, geometry_delta, title_matches, candidate));
             }
         }
-        best.and_then(|(_, element)| retain_element(element))
+        best.filter(|(overlap, _, title_matches, _)| *overlap > 0.0 || *title_matches)
+            .and_then(|(_, _, _, element)| retain_element(element))
             .or_else(|| copy_attribute(application, "AXFocusedWindow"))
     }
 
@@ -342,6 +612,13 @@ mod platform {
         (right - left).max(0.0) * (bottom - top).max(0.0)
     }
 
+    fn geometry_delta(rect: CGRect, bounds: WindowBounds) -> f64 {
+        (rect.origin.x - f64::from(bounds.x)).abs()
+            + (rect.origin.y - f64::from(bounds.y)).abs()
+            + (rect.size.width - f64::from(bounds.width)).abs()
+            + (rect.size.height - f64::from(bounds.height)).abs()
+    }
+
     unsafe fn copy_attribute(element: AXUIElementRef, name: &str) -> Option<OwnedValue> {
         let attribute = CFString::new(name);
         let mut value: CFTypeRef = ptr::null();
@@ -349,6 +626,36 @@ mod platform {
             == AX_SUCCESS
             && !value.is_null())
         .then_some(OwnedValue(value))
+    }
+
+    unsafe fn action_names(element: AXUIElementRef) -> Vec<String> {
+        let mut values: CFArrayRef = ptr::null();
+        if AXUIElementCopyActionNames(element, &mut values) != AX_SUCCESS || values.is_null() {
+            return Vec::new();
+        }
+        let values = OwnedValue(values.cast());
+        if CFGetTypeID(values.0) != CFArrayGetTypeID() {
+            return Vec::new();
+        }
+        let count = CFArrayGetCount(values.0.cast());
+        (0..count)
+            .filter_map(|index| {
+                let value = CFArrayGetValueAtIndex(values.0.cast(), index);
+                if value.is_null() || CFGetTypeID(value) != CFStringGetTypeID() {
+                    return None;
+                }
+                let text = CFString::wrap_under_get_rule(value as CFStringRef).to_string();
+                (!text.is_empty()).then_some(limited_text(text))
+            })
+            .collect()
+    }
+
+    unsafe fn attribute_settable(element: AXUIElementRef, name: &str) -> bool {
+        let attribute = CFString::new(name);
+        let mut settable = false;
+        AXUIElementIsAttributeSettable(element, attribute.as_concrete_TypeRef(), &mut settable)
+            == AX_SUCCESS
+            && settable
     }
 
     unsafe fn string_attribute(element: AXUIElementRef, name: &str) -> String {
@@ -399,12 +706,13 @@ mod platform {
 #[cfg(target_os = "windows")]
 mod platform {
     use super::*;
+    use windows::Win32::Foundation::HWND;
     use windows::Win32::System::Com::{
         CoCreateInstance, CoInitializeEx, CLSCTX_INPROC_SERVER, COINIT_MULTITHREADED,
     };
-    use windows::Win32::UI::Accessibility::{CUIAutomation, IUIAutomation, IUIAutomationElement};
-
-    use windows::Win32::Foundation::HWND;
+    use windows::Win32::UI::Accessibility::{
+        CUIAutomation, IUIAutomation, IUIAutomationElement, IUIAutomationTreeWalker,
+    };
 
     pub fn capture(target: &ApplicationTarget) -> Result<AccessibilitySnapshot, String> {
         unsafe {
@@ -418,38 +726,66 @@ mod platform {
             let walker = automation
                 .ControlViewWalker()
                 .map_err(|error| error.to_string())?;
-            let mut nodes = Vec::new();
-            visit(&walker, &root, None, 0, target.bounds, &mut nodes);
+            let mut raw_nodes = Vec::new();
+            let mut traversal_truncated = false;
+            visit(
+                &walker,
+                &root,
+                None,
+                Vec::new(),
+                0,
+                target.bounds,
+                &mut raw_nodes,
+                &mut traversal_truncated,
+            );
+            let (nodes, element_paths, projection_truncated) = compact_nodes(raw_nodes);
             let window_title = root
                 .CurrentName()
                 .map(|value| value.to_string())
                 .unwrap_or_default();
-            Ok(AccessibilitySnapshot {
-                available: true,
-                application: limited_text(target.display_name.clone()),
-                window_title: limited_text(window_title),
+            Ok(AccessibilitySnapshot::captured(
+                target,
+                window_title,
                 nodes,
-                error: None,
-            })
+                element_paths,
+                !traversal_truncated && !projection_truncated,
+            ))
         }
     }
 
-    pub fn focus(_: &ApplicationTarget) -> Result<(), String> {
-        Ok(())
+    pub fn perform_action(
+        _: &ApplicationTarget,
+        _: &AccessibilitySnapshot,
+        _: u32,
+        _: &str,
+    ) -> Result<(), String> {
+        Err("accessibility actions are not implemented on Windows".into())
+    }
+
+    pub fn set_value(
+        _: &ApplicationTarget,
+        _: &AccessibilitySnapshot,
+        _: u32,
+        _: &str,
+    ) -> Result<(), String> {
+        Err("accessibility value setting is not implemented on Windows".into())
     }
 
     unsafe fn visit(
-        walker: &windows::Win32::UI::Accessibility::IUIAutomationTreeWalker,
+        walker: &IUIAutomationTreeWalker,
         element: &IUIAutomationElement,
-        parent_id: Option<u32>,
+        parent_index: Option<usize>,
+        path: Vec<usize>,
         depth: usize,
         surface: WindowBounds,
-        nodes: &mut Vec<AccessibilityNode>,
+        nodes: &mut Vec<RawAccessibilityNode>,
+        truncated: &mut bool,
     ) {
-        if depth > MAX_ACCESSIBILITY_DEPTH || nodes.len() >= MAX_ACCESSIBILITY_NODES {
+        if depth > MAX_ACCESSIBILITY_DEPTH || nodes.len() >= MAX_ACCESSIBILITY_RAW_NODES {
+            *truncated = true;
             return;
         }
-        let element_id = nodes.len() as u32 + 1;
+        let raw_index = nodes.len();
         let bounds = element.CurrentBoundingRectangle().ok().and_then(|rect| {
             normalized_bounds(
                 rect.left,
@@ -471,36 +807,61 @@ mod platform {
             .CurrentHelpText()
             .map(|value| value.to_string())
             .unwrap_or_default();
-        nodes.push(AccessibilityNode {
-            element_id,
-            parent_id,
-            role: limited_text(role),
-            name: limited_text(name),
-            value: limited_text(value),
-            enabled: element
-                .CurrentIsEnabled()
-                .map(|value| value.as_bool())
-                .unwrap_or(true),
-            focusable: element
-                .CurrentIsKeyboardFocusable()
-                .map(|value| value.as_bool())
-                .unwrap_or(false),
-            bounds,
+        nodes.push(RawAccessibilityNode {
+            parent_index,
+            path: path.clone(),
+            node: AccessibilityNode {
+                element_id: 0,
+                parent_id: None,
+                role: limited_text(role),
+                subrole: String::new(),
+                name: limited_text(name),
+                value: limited_text(value),
+                identifier: element
+                    .CurrentAutomationId()
+                    .map(|value| limited_text(value.to_string()))
+                    .unwrap_or_default(),
+                placeholder: String::new(),
+                enabled: element
+                    .CurrentIsEnabled()
+                    .map(|value| value.as_bool())
+                    .unwrap_or(true),
+                focused: element
+                    .CurrentHasKeyboardFocus()
+                    .map(|value| value.as_bool())
+                    .unwrap_or(false),
+                focusable: element
+                    .CurrentIsKeyboardFocusable()
+                    .map(|value| value.as_bool())
+                    .unwrap_or(false),
+                selected: false,
+                expanded: None,
+                actions: Vec::new(),
+                value_settable: false,
+                bounds,
+            },
         });
         let mut child = walker.GetFirstChildElement(element).ok();
+        let mut child_index = 0usize;
         while let Some(current) = child {
+            let mut child_path = path.clone();
+            child_path.push(child_index);
             visit(
                 walker,
                 &current,
-                Some(element_id),
+                Some(raw_index),
+                child_path,
                 depth + 1,
                 surface,
                 nodes,
+                truncated,
             );
-            if nodes.len() >= MAX_ACCESSIBILITY_NODES {
+            if nodes.len() >= MAX_ACCESSIBILITY_RAW_NODES {
+                *truncated = true;
                 break;
             }
             child = walker.GetNextSiblingElement(&current).ok();
+            child_index += 1;
         }
     }
 }
@@ -513,7 +874,21 @@ mod platform {
         Err("accessibility tree is not supported on this platform".into())
     }
 
-    pub fn focus(_: &ApplicationTarget) -> Result<(), String> {
-        Ok(())
+    pub fn perform_action(
+        _: &ApplicationTarget,
+        _: &AccessibilitySnapshot,
+        _: u32,
+        _: &str,
+    ) -> Result<(), String> {
+        Err("accessibility actions are not supported on this platform".into())
+    }
+
+    pub fn set_value(
+        _: &ApplicationTarget,
+        _: &AccessibilitySnapshot,
+        _: u32,
+        _: &str,
+    ) -> Result<(), String> {
+        Err("accessibility value setting is not supported on this platform".into())
     }
 }

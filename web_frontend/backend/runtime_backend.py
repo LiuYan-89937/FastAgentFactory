@@ -96,7 +96,7 @@ from combo.dynamic_runtime.runtime_infrastructure import (
     ToolEntrypointResolver,
     SharedToolOutputResolver,
     SnapshotRuntimeResourceProjector,
-    RuntimeProcessResourcePool,
+    SessionProcessResourcePool,
     RuntimeFilesystemResourcePool,
     RevisionBoundMCPEntrypointResolver,
     runtime_resource_factory,
@@ -279,7 +279,7 @@ class RuntimeBackend:
             )
         )
         self.browser_runtime = BrowserRuntime(config.browser_runtime)
-        self.process_resources = RuntimeProcessResourcePool(
+        self.process_resources = SessionProcessResourcePool(
             environment=dict(config.process_environment)
         )
         self.filesystem_resources = RuntimeFilesystemResourcePool(
@@ -351,6 +351,7 @@ class RuntimeBackend:
             tool_output_root=config.tool_output_root,
             managed_workspace_root=config.workspace_root,
             attachment_uploads=attachment_upload_store(),
+            close_session_processes=self.process_resources.close_sessions,
             quiesce_timeout_seconds=config.conversation_delete_quiesce_timeout_seconds,
             quiesce_poll_seconds=config.conversation_delete_poll_seconds,
         )

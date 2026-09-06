@@ -39,7 +39,6 @@ export function applyComputerUseLifecycleEvent(
       || null,
     startedAt: startedAtForEvent(current, event, retainsObservation),
     updatedAt: event.timestamp,
-    frame: frameView(progress?.frame) || (retainsObservation ? current.frame : null) || null,
     target: targetView(progress?.target) || (retainsObservation ? current.target : null) || null,
     accessibility: accessibilityView(progress?.accessibility)
       || (retainsObservation ? current.accessibility : null)
@@ -175,18 +174,6 @@ function objectValue(value: unknown): Record<string, any> | null {
     : null
 }
 
-function frameView(value: unknown) {
-  const frame = objectValue(value)
-  if (!frame) return null
-  const frameId = optionalNumber(frame.frame_id)
-  const width = optionalNumber(frame.width)
-  const height = optionalNumber(frame.height)
-  const mimeType = optionalText(frame.mime_type)
-  const data = optionalText(frame.data)
-  if (frameId === null || width === null || height === null || !mimeType || !data) return null
-  return { frameId, width, height, mimeType, data }
-}
-
 function accessibilityView(value: unknown) {
   const accessibility = objectValue(value)
   if (!accessibility || !Array.isArray(accessibility.nodes)) return null
@@ -212,6 +199,7 @@ function targetView(value: unknown) {
   return {
     applicationId,
     displayName,
+    iconDataUrl: optionalText(target.icon_data_url),
     processId,
     windowId,
     windowTitle: optionalText(target.window_title) || '',

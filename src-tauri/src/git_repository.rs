@@ -1120,11 +1120,14 @@ fn create_worktree_snapshot(
 ) -> Result<git2::Oid, String> {
     let mut index = repo.index().map_err(error_text)?;
     index.read(true).map_err(error_text)?;
-    let mut include_review_file = |path: &Path, _matched: &[u8]| {
-        i32::from(is_workspace_input_path(path))
-    };
+    let mut include_review_file =
+        |path: &Path, _matched: &[u8]| i32::from(is_workspace_input_path(path));
     index
-        .add_all(["*"], IndexAddOption::DEFAULT, Some(&mut include_review_file))
+        .add_all(
+            ["*"],
+            IndexAddOption::DEFAULT,
+            Some(&mut include_review_file),
+        )
         .map_err(error_text)?;
     index
         .update_all(["*"], Some(&mut include_review_file))
@@ -1192,7 +1195,8 @@ fn snapshot_tree<'repo>(
     reference: &str,
 ) -> Result<git2::Tree<'repo>, String> {
     let oid = reference_target(repo, reference)?;
-    let tree = repo.find_commit(oid)
+    let tree = repo
+        .find_commit(oid)
         .map_err(error_text)?
         .tree()
         .map_err(error_text)?;
@@ -1208,9 +1212,8 @@ fn is_workspace_input_path(path: &Path) -> bool {
 }
 
 fn write_turn_review_tree(repo: &Repository, index: &mut git2::Index) -> Result<git2::Oid, String> {
-    let mut remove_input_file = |path: &Path, _matched: &[u8]| {
-        i32::from(!is_workspace_input_path(path))
-    };
+    let mut remove_input_file =
+        |path: &Path, _matched: &[u8]| i32::from(!is_workspace_input_path(path));
     index
         .remove_all(["*"], Some(&mut remove_input_file))
         .map_err(error_text)?;

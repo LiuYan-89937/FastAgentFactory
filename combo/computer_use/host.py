@@ -17,6 +17,7 @@ COMPUTER_HOST_TOKEN_ENV = "COMBO_COMPUTER_HOST_TOKEN"
 class ApplicationDescriptor:
     application_id: str
     display_name: str
+    bundle_identifier: str | None
     process_id: int
     windows: tuple[dict[str, Any], ...]
 
@@ -25,7 +26,9 @@ class ApplicationDescriptor:
 class ApplicationTarget:
     application_id: str
     display_name: str
+    bundle_identifier: str | None
     process_id: int
+    icon_data_url: str | None
     window_id: int
     window_title: str
     bounds: dict[str, Any]
@@ -33,13 +36,6 @@ class ApplicationTarget:
 
 @dataclass(frozen=True, slots=True)
 class WindowObservation:
-    frame_id: int
-    width: int
-    height: int
-    mime_type: str
-    image: bytes
-    stable: bool
-    change_score: float
     target: ApplicationTarget
     accessibility: dict[str, Any]
 
@@ -143,30 +139,9 @@ class ComputerHostClient:
             if self._clear_session(target_session_id):
                 self.close()
 
-    def observe(
-        self,
-        session_id: str,
-        *,
-        after_frame_id: int | None = None,
-        settle: bool = False,
-    ) -> WindowObservation:
-        response, image = self._session_request(
-            session_id,
-            {
-                "op": "observe",
-                "after_frame_id": after_frame_id,
-                "settle": settle,
-            },
-            expect_binary=True,
-        )
+    def observe(self, session_id: str) -> WindowObservation:
+        response = self._session_request(session_id, {"op": "observe"})
         return WindowObservation(
-            frame_id=_required_int(response, "frame_id"),
-            width=_required_int(response, "width"),
-            height=_required_int(response, "height"),
-            mime_type=str(response.get("mime_type") or "image/jpeg"),
-            image=image,
-            stable=bool(response.get("stable", False)),
-            change_score=float(response.get("change_score") or 0.0),
             target=_application_target(response.get("target")),
             accessibility=_accessibility_snapshot(response),
         )
@@ -207,14 +182,9 @@ class ComputerHostClient:
         self,
         session_id: str,
         payload: dict[str, Any],
-        *,
-        expect_binary: bool = False,
-    ) -> tuple[dict[str, Any], bytes] | dict[str, Any]:
+    ) -> dict[str, Any]:
         normalized_session_id = _normalized_session_id(session_id)
-        return self._request(
-            {**payload, "session_id": normalized_session_id},
-            expect_binary=expect_binary,
-        )
+        return self._request({**payload, "session_id": normalized_session_id})
 
     def _current_session_id(self) -> str | None:
         with self._session_lock:
@@ -227,12 +197,7 @@ class ComputerHostClient:
             self._session_id = None
             return True
 
-    def _request(
-        self,
-        payload: dict[str, Any],
-        *,
-        expect_binary: bool = False,
-    ) -> tuple[dict[str, Any], bytes] | dict[str, Any]:
+    def _request(self, payload: dict[str, Any]) -> dict[str, Any]:
         request = {"token": self._token, **payload}
         encoded = (
             json.dumps(request, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
@@ -250,11 +215,7 @@ class ComputerHostClient:
                     raise RuntimeError("native computer host returned a non-object response")
                 if not bool(response.get("ok")):
                     raise RuntimeError(str(response.get("error") or "native computer host request failed"))
-                if not expect_binary:
-                    return response
-                length = _required_int(response, "content_length")
-                image = _read_exact(reader, length)
-                return response, image
+                return response
             except (OSError, ValueError, json.JSONDecodeError, ConnectionError):
                 self.close()
                 raise
@@ -301,6 +262,7 @@ def _application_descriptor(value: Any) -> ApplicationDescriptor:
     return ApplicationDescriptor(
         application_id=_required_text(value, "application_id"),
         display_name=_required_text(value, "display_name"),
+        bundle_identifier=_optional_text(value.get("bundle_identifier")),
         process_id=_required_int(value, "process_id"),
         windows=tuple(windows),
     )
@@ -315,7 +277,9 @@ def _application_target(value: Any) -> ApplicationTarget:
     return ApplicationTarget(
         application_id=_required_text(value, "application_id"),
         display_name=_required_text(value, "display_name"),
+        bundle_identifier=_optional_text(value.get("bundle_identifier")),
         process_id=_required_int(value, "process_id"),
+        icon_data_url=_optional_text(value.get("icon_data_url")),
         window_id=_required_int(value, "window_id"),
         window_title=str(value.get("window_title") or ""),
         bounds=bounds,
@@ -329,13 +293,8 @@ def _required_text(payload: dict[str, Any], key: str) -> str:
     return value
 
 
-def _read_exact(reader: Any, length: int) -> bytes:
-    remaining = length
-    chunks: list[bytes] = []
-    while remaining > 0:
-        chunk = reader.read(remaining)
-        if not chunk:
-            raise ConnectionError("native computer host ended a frame early")
-        chunks.append(chunk)
-        remaining -= len(chunk)
-    return b"".join(chunks)
+def _optional_text(value: Any) -> str | None:
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip()
+    return normalized or None

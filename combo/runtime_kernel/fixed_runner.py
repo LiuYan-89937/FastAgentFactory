@@ -189,7 +189,9 @@ def make_fixed_runner(
                         *_interrupted_model_messages(exc, error_code="runtime_cancelled"),
                     ],
                 )
-            steered_messages = _consume_injected_messages()
+            steered_messages = _injected_messages(exc.input_injections)
+            if not steered_messages:
+                steered_messages = _consume_injected_messages()
             if not steered_messages:
                 raise
             _preserve_interrupted_conversation(interrupted, exc)
@@ -272,8 +274,12 @@ def _interrupted_model_messages(
 
 
 def _consume_injected_messages() -> list[Any]:
+    return _injected_messages(consume_runtime_inputs())
+
+
+def _injected_messages(injections: Any) -> list[Any]:
     messages: list[Any] = []
-    for injection in consume_runtime_inputs():
+    for injection in injections or ():
         role = str(getattr(injection, "role", "") or "")
         content = str(getattr(injection, "content", "") or "").strip()
         injection_id = str(getattr(injection, "injection_id", "") or "").strip()

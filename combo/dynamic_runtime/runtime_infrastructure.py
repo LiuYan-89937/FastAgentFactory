@@ -79,11 +79,17 @@ RuntimeResourceFactory = Callable[[RuntimeInstance], ProjectedRuntimeResource]
 @dataclass(slots=True)
 class _ProcessPoolEntry:
     resource: ProcessRuntimeResource
+    principal_id: str
+    session_id: str
     references: int
 
 
-class RuntimeProcessResourcePool:
-    """Own one isolated process manager per runtime attempt and fence its handles."""
+class SessionProcessResourcePool:
+    """Own one process manager per conversation session.
+
+    Runtime attempts borrow the manager, while background processes remain owned by
+    the session until the conversation is deleted or the backend shuts down.
+    """
 
     def __init__(self, *, environment: Mapping[str, str]) -> None:
         self._environment = MappingProxyType(dict(environment))
@@ -99,7 +105,7 @@ class RuntimeProcessResourcePool:
         allowed_write_paths: tuple[Path, ...] = (),
         write_scope_enforced: bool = False,
     ) -> ProjectedRuntimeResource:
-        key = _runtime_attempt_key(instance)
+        key = _runtime_session_key(instance)
         resolved_root = root.expanduser().resolve()
         with self._lock:
             entry = self._entries.get(key)
@@ -112,11 +118,15 @@ class RuntimeProcessResourcePool:
                         ),
                         root=resolved_root,
                     ),
+                    principal_id=instance.request.principal_id,
+                    session_id=instance.request.session_id,
                     references=0,
                 )
                 self._entries[key] = entry
             elif entry.resource.root != resolved_root:
-                raise RuntimeError("runtime attempt process root changed while leased")
+                raise RuntimeError("conversation process root changed")
+            elif entry.principal_id != instance.request.principal_id:
+                raise RuntimeError("conversation process owner changed")
             entry.references += 1
         return ProjectedRuntimeResource(value=entry.resource, release_callback=lambda: self._release(key))
 
@@ -127,19 +137,36 @@ class RuntimeProcessResourcePool:
         for entry in entries:
             entry.resource.manager.close()
 
+    def close_sessions(self, session_ids: tuple[str, ...]) -> None:
+        selected = frozenset(_required_identity(value, "session_id") for value in session_ids)
+        if not selected:
+            return
+        with self._lock:
+            active = [
+                entry.session_id
+                for entry in self._entries.values()
+                if entry.session_id in selected and entry.references > 0
+            ]
+            if active:
+                raise RuntimeError(
+                    "conversation process resources are still leased: " + ", ".join(sorted(active))
+                )
+            entries = [
+                self._entries.pop(key)
+                for key, entry in tuple(self._entries.items())
+                if entry.session_id in selected
+            ]
+        for entry in entries:
+            entry.resource.manager.close()
+
     def _release(self, key: str) -> None:
-        resource: ProcessRuntimeResource | None = None
         with self._lock:
             entry = self._entries.get(key)
             if entry is None:
                 return
             entry.references -= 1
             if entry.references < 0:
-                raise RuntimeError("process runtime resource reference count underflow")
-            if entry.references == 0:
-                resource = self._entries.pop(key).resource
-        if resource is not None:
-            resource.manager.close()
+                raise RuntimeError("conversation process resource reference count underflow")
 
 
 @dataclass(slots=True)
@@ -410,7 +437,7 @@ def runtime_resource_factory(
     capability_installer_runtime: CapabilityInstallerService,
     capability_blobs: CapabilityBlobStore,
     runtime_instances,
-    process_resources: RuntimeProcessResourcePool,
+    process_resources: SessionProcessResourcePool,
     filesystem_resources: RuntimeFilesystemResourcePool,
     tool_output_store: ToolOutputStore,
 ) -> RuntimeResourceFactory:
@@ -554,6 +581,17 @@ def _runtime_attempt_key(instance: RuntimeInstance) -> str:
     if instance.attempt_id is None:
         raise RuntimeError("runtime resource requires a claimed attempt")
     return f"{instance.runtime_instance_id}:{instance.attempt_id}"
+
+
+def _runtime_session_key(instance: RuntimeInstance) -> str:
+    return _required_identity(instance.request.session_id, "session_id")
+
+
+def _required_identity(value: str, field_name: str) -> str:
+    normalized = str(value or "").strip()
+    if not normalized:
+        raise ValueError(f"{field_name} must not be empty")
+    return normalized
 
 
 def _release_callbacks(callbacks: list[ReleaseCallback]) -> None:

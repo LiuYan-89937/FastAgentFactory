@@ -3,7 +3,6 @@ import { useI18n } from '@/composables/useI18n'
 import { useRuntimeStore } from '@/stores/runtime'
 import type {
   ComputerUseAccessibilityView,
-  ComputerUseFrameView,
   ComputerUseTargetView,
   ToolActivity,
   TranscriptItem,
@@ -21,7 +20,6 @@ export interface ConversationActivitySummary {
   requestId: string
   kind: 'default' | 'computer_use'
   startedAt: string | null
-  frame: ComputerUseFrameView | null
   target: ComputerUseTargetView | null
   accessibility: ComputerUseAccessibilityView | null
 }
@@ -113,7 +111,6 @@ export function useConversationMessageProjection() {
       requestId: String(activeTurn.requestId || ''),
       kind: displayStatus.kind,
       startedAt: displayStatus.startedAt,
-      frame: displayStatus.frame,
       target: displayStatus.target,
       accessibility: displayStatus.accessibility,
     }
@@ -183,7 +180,6 @@ function activeRuntimeDisplayStatus(
       role: 'assistant',
       kind: 'computer_use',
       startedAt: computerUseActivity.startedAt || null,
-      frame: computerUseActivity.frame || null,
       target: computerUseActivity.target || null,
       accessibility: computerUseActivity.accessibility || null,
     }
@@ -199,7 +195,6 @@ function activeRuntimeDisplayStatus(
       role: 'system',
       kind: 'default',
       startedAt: null,
-      frame: null,
       target: null,
       accessibility: null,
     }
@@ -216,7 +211,6 @@ function activeRuntimeDisplayStatus(
       role: 'assistant',
       kind: 'default',
       startedAt: null,
-      frame: null,
       target: null,
       accessibility: null,
     }
@@ -226,7 +220,6 @@ function activeRuntimeDisplayStatus(
     role: 'assistant',
     kind: 'default',
     startedAt: null,
-    frame: null,
     target: null,
     accessibility: null,
   }

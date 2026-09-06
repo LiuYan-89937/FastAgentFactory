@@ -26,6 +26,7 @@ from combo.runtime_protocol import (
     RuntimeProtocolDescriptor,
     ToolCallRecord,
     UserRuntimePolicy,
+    is_runtime_cancellation,
 )
 from combo.runtime_i18n import normalize_runtime_locale
 from combo.runtime_protocol.chat_parts import build_chat_turn_messages
@@ -1854,8 +1855,9 @@ def _frontend_message_part(
         call_id = str(value.get("tool_call_id") or "").strip()
         error_code = str(value.get("error_code") or "").strip()
         output = value.get("output")
+        cancelled = is_runtime_cancellation(value)
         error = None
-        if error_code:
+        if error_code and not cancelled:
             details = dict(output) if isinstance(output, dict) else {}
             error = {**details, "code": error_code}
         return {
@@ -1865,7 +1867,7 @@ def _frontend_message_part(
             "callId": value.get("tool_call_id"),
             "output": output,
             "error": error,
-            "status": "failed" if error_code else value.get("status") or "completed",
+            "status": "cancelled" if cancelled else "failed" if error_code else value.get("status") or "completed",
             "startedAt": value.get("started_at"),
             "completedAt": value.get("completed_at"),
             "updatedAt": value.get("completed_at"),
@@ -1900,7 +1902,9 @@ def _frontend_message_part(
 
 
 def _tool_activity_view(backend: Any, record: ToolCallRecord) -> dict[str, Any]:
-    status = {
+    record_value = record.model_dump(mode="json")
+    cancelled = is_runtime_cancellation(record_value)
+    status = "cancelled" if cancelled else {
         "proposed": "proposed",
         "waiting_approval": "approval",
         "running": "started",
@@ -1930,7 +1934,7 @@ def _tool_activity_view(backend: Any, record: ToolCallRecord) -> dict[str, Any]:
             "capability_id": record.capability_id,
             "arguments": record.arguments,
             "output": record.result,
-            "error": record.error_code,
+            "error": None if cancelled else record.error_code,
             "started_at": record.started_at,
             "completed_at": record.completed_at,
         },

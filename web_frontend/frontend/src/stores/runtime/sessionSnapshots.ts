@@ -1,4 +1,5 @@
 import type {
+  ChatMessagePart,
   ContextWindowView,
   ConversationTurn,
   RuntimeFrontendEvent,
@@ -11,10 +12,7 @@ import type {
 } from '@/types/protocol'
 import { agentPackageConversationScope } from './scopes'
 import { isPlanCapsuleDismissed } from '@/utils/planCapsuleDismissals'
-import {
-  isComputerUseToolActivity,
-  withoutComputerUseParts,
-} from '@/utils/computerUse'
+import { isRuntimeCancellation } from '@/utils/runtimeCancellation'
 
 export interface AgentPackageSessionSnapshotView {
   sessionPackageId: string | null
@@ -73,9 +71,14 @@ function toolsFromTurns(turns: ConversationTurn[]): ToolActivity[] {
   const byKey = new Map<string, ToolActivity>()
   turns.forEach((turn) => {
     turn.tools.forEach((tool) => {
-      if (isComputerUseToolActivity(tool)) return
       const key = String(tool.activityKey || tool.toolCallId || '')
-      if (key) byKey.set(key, { ...tool, payload: { ...(tool.payload || {}) } })
+      if (!key) return
+      const payload = { ...(tool.payload || {}) }
+      byKey.set(key, {
+        ...tool,
+        status: isRuntimeCancellation(payload) ? 'cancelled' : tool.status,
+        payload,
+      })
     })
   })
   return Array.from(byKey.values())
@@ -130,7 +133,7 @@ function conversationFromTurns(rawTurns: any[], context: TurnRestoreContext) {
     const updatedAt = String(turn.updated_at || createdAt)
     const turnMessages = Array.isArray(turn.messages) ? turn.messages : []
     const toolActivities = Array.isArray(turn.tool_activities)
-      ? turn.tool_activities.filter((activity: ToolActivity) => !isComputerUseToolActivity(activity))
+      ? turn.tool_activities
       : []
     if (turnMessages.length > 0) {
       restoreTurnMessages({
@@ -227,7 +230,7 @@ function transcriptItemFromPartMessage(
 ): TranscriptItem | null {
   if (!rawMessage || typeof rawMessage !== 'object') return null
   const role = rawMessage.role === 'assistant' ? 'assistant' : rawMessage.role === 'system' ? 'system' : 'user'
-  const parts = withoutComputerUseParts(Array.isArray(rawMessage.parts) ? rawMessage.parts : [])
+  const parts: ChatMessagePart[] = Array.isArray(rawMessage.parts) ? rawMessage.parts : []
   if (parts.length === 0) return null
   const timestamp = String(rawMessage.timestamp || options.fallbackTimestamp || new Date().toISOString())
   const content = parts

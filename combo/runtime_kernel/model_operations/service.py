@@ -41,6 +41,7 @@ from combo.tooling.model_visibility import tools_visible_to_model
 from combo.tooling.execution_context import (
     RuntimeModelGenerationInterrupted,
     begin_runtime_model_generation,
+    consume_runtime_inputs,
     execute_runtime_model_invocation,
     register_runtime_model_cancellation,
     runtime_model_generation_is_current,
@@ -214,6 +215,7 @@ class ModelInvocationOperations:
                 reasoning_content=exc.reasoning_content,
                 partial_tool_calls=exc.partial_tool_calls,
                 stream_id=stream_id,
+                input_injections=consume_runtime_inputs(),
             ) from exc
         except Exception as exc:
             _emit(emit_event, "model_call_failed", {"operation": "tool_bound_chat", "error": str(exc)})

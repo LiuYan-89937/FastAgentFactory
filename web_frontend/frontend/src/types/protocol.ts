@@ -357,7 +357,6 @@ export interface ComputerUseActivityView {
   message?: string | null
   startedAt?: string | null
   updatedAt?: string | null
-  frame?: ComputerUseFrameView | null
   target?: ComputerUseTargetView | null
   accessibility?: ComputerUseAccessibilityView | null
 }
@@ -365,17 +364,10 @@ export interface ComputerUseActivityView {
 export interface ComputerUseTargetView {
   applicationId: string
   displayName: string
+  iconDataUrl?: string | null
   processId: number
   windowId: number
   windowTitle: string
-}
-
-export interface ComputerUseFrameView {
-  frameId: number
-  width: number
-  height: number
-  mimeType: string
-  data: string
 }
 
 export interface ComputerUseAccessibilityView {

@@ -6,71 +6,23 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 MAX_ACTIONS_PER_STEP = 16
-Coordinate = Annotated[float, Field(ge=0, le=1, allow_inf_nan=False)]
-KeyName = Annotated[str, Field(
-    min_length=1,
-    pattern=r"^(\S+| )$",
-    description=(
-        "A single literal character (including a space), or a named key: "
-        "ctrl, shift, alt, meta, enter, tab, space, backspace, delete, escape, "
-        "home, end, pageup, pagedown, left, right, up, down, f1 through f12. "
-        "Use meta for Command on macOS."
-    ),
-)]
+AccessibilityActionName = Annotated[str, Field(min_length=1)]
 
 
 class Action(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
 
-class Click(Action):
-    type: Literal["click", "double_click"]
-    x: Coordinate
-    y: Coordinate
-    button: Literal["left", "right", "middle"]
-
-
-class ClickElement(Action):
-    type: Literal["click_element"]
+class PerformAction(Action):
+    type: Literal["perform_action"]
     element_id: int = Field(ge=1)
-    button: Literal["left", "right", "middle"] = "left"
+    action: AccessibilityActionName
 
 
 class SetValue(Action):
     type: Literal["set_value"]
     element_id: int = Field(ge=1)
     text: str
-
-
-class Drag(Action):
-    type: Literal["drag"]
-    from_x: Coordinate
-    from_y: Coordinate
-    to_x: Coordinate
-    to_y: Coordinate
-    duration_ms: int = Field(ge=40, le=2000)
-    button: Literal["left", "right", "middle"]
-
-
-class Scroll(Action):
-    type: Literal["scroll"]
-    horizontal: int = Field(ge=-30, le=30)
-    vertical: int = Field(ge=-30, le=30)
-
-
-class TypeText(Action):
-    type: Literal["type"]
-    text: str
-
-
-class Key(Action):
-    type: Literal["key"]
-    key: KeyName
-
-
-class Hotkey(Action):
-    type: Literal["hotkey"]
-    keys: list[KeyName] = Field(min_length=1, max_length=5)
 
 
 class Wait(Action):
@@ -84,7 +36,7 @@ class ComputerDecision(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
     status: Literal["continue", "done", "blocked"]
-    actions: list[ClickElement | SetValue | Click | Drag | Scroll | TypeText | Key | Hotkey | Wait] = Field(
+    actions: list[PerformAction | SetValue | Wait] = Field(
         max_length=MAX_ACTIONS_PER_STEP,
     )
     note: str

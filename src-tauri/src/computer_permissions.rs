@@ -4,12 +4,11 @@ use serde::{Deserialize, Serialize};
 pub struct ComputerPermissions {
     required: bool,
     accessibility: bool,
-    screen_recording: bool,
 }
 
 impl ComputerPermissions {
     pub fn ready(&self) -> bool {
-        !self.required || (self.accessibility && self.screen_recording)
+        !self.required || self.accessibility
     }
 }
 
@@ -17,7 +16,6 @@ impl ComputerPermissions {
 #[serde(rename_all = "snake_case")]
 pub enum ComputerPermission {
     Accessibility,
-    ScreenRecording,
 }
 
 #[cfg(target_os = "macos")]
@@ -31,19 +29,12 @@ mod platform {
         fn AXIsProcessTrusted() -> bool;
     }
 
-    #[link(name = "CoreGraphics", kind = "framework")]
-    extern "C" {
-        fn CGPreflightScreenCaptureAccess() -> bool;
-        fn CGRequestScreenCaptureAccess() -> bool;
-    }
-
     pub fn status() -> ComputerPermissions {
         // Query permission only: do not capture the screen or simulate input.
         unsafe {
             ComputerPermissions {
                 required: true,
                 accessibility: AXIsProcessTrusted(),
-                screen_recording: CGPreflightScreenCaptureAccess(),
             }
         }
     }
@@ -61,12 +52,6 @@ mod platform {
                     open_settings("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")?;
                 }
             }
-            ComputerPermission::ScreenRecording if !status().screen_recording => unsafe {
-                CGRequestScreenCaptureAccess();
-                if !status().screen_recording {
-                    open_settings("x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")?;
-                }
-            },
             _ => {}
         }
         Ok(())
@@ -95,7 +80,6 @@ mod platform {
         ComputerPermissions {
             required: false,
             accessibility: false,
-            screen_recording: false,
         }
     }
 

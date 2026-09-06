@@ -112,6 +112,7 @@ import { dismissPlanCapsule, restorePlanCapsule } from '@/utils/planCapsuleDismi
 import {
   isStandaloneAgentSession,
 } from '@/utils/sessionPresentation'
+import { isRuntimeCancellation } from '@/utils/runtimeCancellation'
 
 // 事件去重集合
 const processedEventIds = new Set<string>()
@@ -772,6 +773,10 @@ export const useRuntimeStore = defineStore('runtime', {
     },
 
     _handleRunFailed(event: RuntimeFrontendEvent) {
+      if (isRuntimeCancellation({ ...(event.payload || {}), message: event.message })) {
+        this._handleRunCancelled(event)
+        return
+      }
       const existingRequest = event.request_id ? this.activeRequests[event.request_id] : null
       if (existingRequest?.background) {
         this._completeActiveRequest(event, 'failed')

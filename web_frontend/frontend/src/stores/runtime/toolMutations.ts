@@ -6,6 +6,7 @@ import {
 } from './conversationMutations'
 import { isBackgroundEvent } from './eventUtils'
 import { toolPayloadValue } from './toolPayload'
+import { isRuntimeCancellation } from '@/utils/runtimeCancellation'
 import {
   applyComputerUseApprovalRequest,
   applyComputerUseLifecycleEvent,
@@ -33,16 +34,25 @@ export function applyToolLifecycleEvent(
   if (isBackgroundEvent(event, state.activeRequestId)) return
   const computerUseStatus = status === 'approval'
     ? 'approval'
-    : status === 'failed' && toolEventWasUserCancelled(event)
+    : status === 'failed' && toolEventWasCancelled(event)
       ? 'cancelled'
       : status === 'completed' || status === 'failed' || status === 'cancelled'
         ? status
         : 'running'
-  if (applyComputerUseLifecycleEvent(state, event, computerUseStatus)) return
+  if (applyComputerUseLifecycleEvent(state, event, computerUseStatus)) {
+    if (
+      computerUseStatus === 'completed'
+      || computerUseStatus === 'failed'
+      || computerUseStatus === 'cancelled'
+    ) {
+      upsertToolActivityFromEvent(state, event, computerUseStatus)
+    }
+    return
+  }
   const toolCallId = toolPayloadValue(event.payload || {}, ['tool_call_id', 'toolCallId'])
   const existing = state.tools.find((tool) => toolCallId && tool.toolCallId === String(toolCallId))
   const nextStatus = status === 'failed' && (
-    toolEventWasUserCancelled(event)
+    toolEventWasCancelled(event)
     || existing?.status === 'cancelled'
   )
     ? 'cancelled'
@@ -150,21 +160,8 @@ function isToolActivityInFlight(tool: ToolActivity): boolean {
   return tool.status === 'proposed' || tool.status === 'started' || tool.status === 'approval'
 }
 
-function toolEventWasUserCancelled(event: RuntimeFrontendEvent): boolean {
-  const payload = event.payload || {}
-  const result = payload.result && typeof payload.result === 'object' ? payload.result : null
-  const observation = payload.observation && typeof payload.observation === 'object' ? payload.observation : null
-  const statusValues = [
-    payload.status,
-    payload.execution_status,
-    result?.status,
-    result?.execution_status,
-    observation?.status,
-    observation?.execution_status,
-  ]
-  if (statusValues.some((value) => String(value || '').trim().toLowerCase() === 'cancelled')) return true
-  return [payload.error, result?.message, observation?.message]
-    .some((value) => /user_cancelled|user-cancelled/i.test(String(value || '')))
+function toolEventWasCancelled(event: RuntimeFrontendEvent): boolean {
+  return isRuntimeCancellation({ ...(event.payload || {}), message: event.message })
 }
 
 function resolveApprovalTool(tool: ToolActivity, event: RuntimeFrontendEvent, approved: boolean) {

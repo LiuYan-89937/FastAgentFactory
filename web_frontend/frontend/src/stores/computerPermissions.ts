@@ -2,11 +2,10 @@ import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { invoke, isTauri } from '@tauri-apps/api/core'
 
-type Permission = 'accessibility' | 'screen_recording'
+type Permission = 'accessibility'
 interface ComputerPermissions {
   required: boolean
   accessibility: boolean
-  screen_recording: boolean
 }
 
 export const useComputerPermissionsStore = defineStore('computerPermissions', () => {
@@ -15,7 +14,7 @@ export const useComputerPermissionsStore = defineStore('computerPermissions', ()
   const busy = ref(false)
   const error = ref('')
   const ready = computed(() => Boolean(status.value && (
-    !status.value.required || (status.value.accessibility && status.value.screen_recording)
+    !status.value.required || status.value.accessibility
   )))
   let checking: Promise<boolean> | null = null
 

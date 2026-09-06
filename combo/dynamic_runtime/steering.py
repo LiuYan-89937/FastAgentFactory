@@ -11,7 +11,7 @@ from combo.runtime_protocol import (
 
 
 class SteerRuntimeCommandHandler:
-    """Steer a queued message, including cancellation of a raced tool run."""
+    """Promote a queued message into the currently active runtime."""
 
     def __init__(
         self,
@@ -39,22 +39,12 @@ class SteerRuntimeCommandHandler:
             session_id=envelope.session_id,
         )
 
-        # The target can be claimed by the work lane between the click and
-        # this control command.  It is no longer eligible for injection into a
-        # previous turn; cancel its active tool/runtime instead of reporting a
-        # queued-state validation failure.
+        # The work lane may claim the target after the user submits it but before
+        # this control command runs.  In that case the message has already become
+        # the active turn, so steering is satisfied without interrupting the new
+        # runtime itself.
         if target_receipt.status == "running":
-            runtime_instance_id = str(target_receipt.runtime_instance_id or "").strip()
-            if runtime_instance_id:
-                self._run_controls.request_tool_interrupt(
-                    runtime_instance_id=runtime_instance_id,
-                    reason="user_steered",
-                )
-                return CommandOutcome(status="completed")
-            return CommandOutcome(
-                status="rejected",
-                rejection_code="steering_target_not_ready",
-            )
+            return CommandOutcome(status="completed")
         if target_receipt.status != "queued":
             return CommandOutcome(
                 status="rejected",

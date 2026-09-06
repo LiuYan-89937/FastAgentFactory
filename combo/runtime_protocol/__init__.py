@@ -28,7 +28,11 @@ from combo.runtime_protocol.contracts import (
     TaskRevision,
     UserRuntimePolicy,
 )
-from combo.runtime_protocol.errors import RuntimeErrorCategory, RuntimeErrorEnvelope
+from combo.runtime_protocol.errors import (
+    RuntimeErrorCategory,
+    RuntimeErrorEnvelope,
+    is_runtime_cancellation,
+)
 from combo.runtime_protocol.events import RuntimeEvent
 from combo.runtime_protocol.conversation import (
     ArtifactPart,
@@ -165,6 +169,7 @@ __all__ = [
     "UserRuntimePolicy",
     "RuntimeErrorCategory",
     "RuntimeErrorEnvelope",
+    "is_runtime_cancellation",
     "CancelRuntimeRequestPayload",
     "CancelCommandRequestPayload",
     "CommandEnvelope",

@@ -1,5 +1,5 @@
 <template>
-  <div class="runtime-error-card" role="alert">
+  <div v-if="!cancelled" class="runtime-error-card" role="alert">
     <div class="runtime-error-summary">
       <n-icon class="runtime-error-icon" :size="18">
         <AlertCircleOutline />
@@ -38,6 +38,7 @@ import { AlertCircleOutline } from '@/components/icons'
 import ErrorReportButton from '@/components/common/ErrorReportButton.vue'
 import { useI18n } from '@/composables/useI18n'
 import type { ErrorMessagePart } from '@/types/protocol'
+import { isRuntimeCancellation } from '@/utils/runtimeCancellation'
 
 const props = defineProps<{
   part: ErrorMessagePart
@@ -47,6 +48,7 @@ const { t } = useI18n()
 const errorEnvelope = computed<Record<string, unknown>>(() => (
   isRecord(props.part.details) ? props.part.details : {}
 ))
+const cancelled = computed(() => isRuntimeCancellation(errorEnvelope.value))
 const errorCode = computed(() => stringValue(errorEnvelope.value.code))
 const requestId = computed(() => stringValue(errorEnvelope.value.request_id))
 const diagnosticRef = computed(() => stringValue(errorEnvelope.value.diagnostic_ref))
