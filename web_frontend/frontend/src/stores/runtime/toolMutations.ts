@@ -133,20 +133,22 @@ export function finalizeToolActivitiesForRequest(
     .filter((tool) => tool.requestId === requestId && isToolActivityInFlight(tool))
     .forEach((tool) => {
       tool.status = terminalStatus
-      tool.eventType = 'tool_call_failed'
+      tool.eventType = terminalStatus === 'cancelled' ? 'tool_call_cancelled' : 'tool_call_failed'
       tool.timestamp = timestamp
       tool.payload = {
         ...(tool.payload || {}),
         ...(terminalReason
           ? {
-              error: tool.payload?.error || terminalReason,
+              ...(terminalStatus === 'failed'
+                ? { error: tool.payload?.error || terminalReason }
+                : {}),
               result: tool.payload?.result || {
                 type: 'tool_observation',
                 status: terminalStatus,
                 tool_id: tool.toolName,
                 tool_call_id: tool.toolCallId,
                 message: terminalReason,
-                execution_status: 'failed',
+                execution_status: terminalStatus,
               },
             }
           : {}),

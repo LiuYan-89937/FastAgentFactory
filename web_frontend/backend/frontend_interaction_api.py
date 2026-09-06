@@ -1856,6 +1856,13 @@ def _frontend_message_part(
         error_code = str(value.get("error_code") or "").strip()
         output = value.get("output")
         cancelled = is_runtime_cancellation(value)
+        part_status = (
+            "cancelled"
+            if cancelled
+            else "failed"
+            if error_code
+            else value.get("status") or "completed"
+        )
         error = None
         if error_code and not cancelled:
             details = dict(output) if isinstance(output, dict) else {}
@@ -1867,7 +1874,7 @@ def _frontend_message_part(
             "callId": value.get("tool_call_id"),
             "output": output,
             "error": error,
-            "status": "cancelled" if cancelled else "failed" if error_code else value.get("status") or "completed",
+            "status": part_status,
             "startedAt": value.get("started_at"),
             "completedAt": value.get("completed_at"),
             "updatedAt": value.get("completed_at"),

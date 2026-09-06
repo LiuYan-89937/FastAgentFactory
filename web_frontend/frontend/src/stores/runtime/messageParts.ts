@@ -97,7 +97,7 @@ export function toolResultPart(tool: ToolActivity): ChatMessagePart | null {
     toolName: tool.toolName,
     callId: tool.toolCallId,
     output: tool.payload?.output || tool.payload?.result || tool.payload?.observation || tool.payload?.content || null,
-    error: tool.payload?.error || null,
+    error: tool.status === 'cancelled' ? null : tool.payload?.error || null,
     status: tool.status === 'failed' ? 'failed' : tool.status === 'cancelled' ? 'cancelled' : 'completed',
     createdAt: tool.createdAt,
     startedAt: tool.startedAt,

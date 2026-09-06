@@ -130,9 +130,10 @@ export function mergeToolMessageParts(parts: ChatMessagePart[]): ChatMessagePart
     if (part.type === 'tool_result') {
       const target = matchingExecution(merged, part)
       if (target) {
+        const cancelled = isRuntimeCancellation(part.error || part.output)
         target.output = part.output
-        target.error = part.error
-        target.status = isRuntimeCancellation(part.error || part.output) ? 'cancelled' : part.status
+        target.error = cancelled ? undefined : part.error
+        target.status = cancelled ? 'cancelled' : part.status
         target.startedAt = target.startedAt || part.startedAt
         target.completedAt = part.completedAt
         target.updatedAt = part.updatedAt
@@ -172,6 +173,7 @@ function executionFromCall(part: ToolCallMessagePart): ToolExecutionMessagePart 
 }
 
 function executionFromResult(part: ToolResultMessagePart): ToolExecutionMessagePart {
+  const cancelled = isRuntimeCancellation(part.error || part.output)
   return {
     id: `${part.id}:execution`,
     type: 'tool_execution',
@@ -179,9 +181,9 @@ function executionFromResult(part: ToolResultMessagePart): ToolExecutionMessageP
     callId: part.callId,
     arguments: {},
     output: part.output,
-    error: part.error,
+    error: cancelled ? undefined : part.error,
     artifacts: [],
-    status: isRuntimeCancellation(part.error || part.output) ? 'cancelled' : part.status,
+    status: cancelled ? 'cancelled' : part.status,
     createdAt: part.createdAt,
     startedAt: part.startedAt,
     completedAt: part.completedAt,
